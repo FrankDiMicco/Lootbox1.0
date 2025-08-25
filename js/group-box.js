@@ -598,32 +598,59 @@ const GroupBoxExtension = {
         }
     },
 
-    syncParticipatedGroupBoxData() {
-        if (!app.currentLootbox || !app.currentLootbox.isGroupBox) return;
+    async syncParticipatedGroupBoxData() {
+    if (!app.currentLootbox || !app.currentLootbox.isGroupBox) return;
+    
+    // Find and update the participated group box in local array
+    const groupBoxIndex = app.participatedGroupBoxes.findIndex(
+        gb => gb.groupBoxId === app.currentLootbox.groupBoxId
+    );
+    
+    if (groupBoxIndex >= 0) {
+        // Update the local data with current session data
+        app.participatedGroupBoxes[groupBoxIndex].userTotalOpens = app.currentLootbox.spins;
+        app.participatedGroupBoxes[groupBoxIndex].userRemainingTries = app.currentLootbox.remainingTries;
+        app.participatedGroupBoxes[groupBoxIndex].lastParticipated = new Date();
         
-        // Find and update the participated group box in local array
-        const groupBoxIndex = app.participatedGroupBoxes.findIndex(
-            gb => gb.groupBoxId === app.currentLootbox.groupBoxId
-        );
-        
-        if (groupBoxIndex >= 0) {
-            // Update the local data with current session data
-            app.participatedGroupBoxes[groupBoxIndex].userTotalOpens = app.currentLootbox.spins;
-            app.participatedGroupBoxes[groupBoxIndex].userRemainingTries = app.currentLootbox.remainingTries;
-            app.participatedGroupBoxes[groupBoxIndex].lastParticipated = new Date();
-            
-            // Update localStorage backup
-            try {
-                localStorage.setItem('participatedGroupBoxes', JSON.stringify(app.participatedGroupBoxes));
-            } catch (error) {
-                console.error('Error updating participated group boxes in localStorage:', error);
+        // Save to Firebase
+        try {
+            if (app.isFirebaseReady && window.firebaseDb && window.firebaseAuth && window.firebaseFunctions) {
+                const currentUser = window.firebaseAuth.currentUser;
+                if (currentUser) {
+                    const { doc, updateDoc } = window.firebaseFunctions;
+                    const participatedRef = doc(
+                        window.firebaseDb, 
+                        'users', 
+                        currentUser.uid, 
+                        'participated_group_boxes', 
+                        app.currentLootbox.groupBoxId
+                    );
+                    
+                    await updateDoc(participatedRef, {
+                        userTotalOpens: app.currentLootbox.spins,
+                        userRemainingTries: app.currentLootbox.remainingTries,
+                        lastParticipated: new Date()
+                    });
+                    
+                    console.log('Updated participated group box in Firebase');
+                }
             }
-            
-            console.log('Synced Group Box data:', app.currentLootbox.name, 
-                       'Opens:', app.currentLootbox.spins, 
-                       'Remaining:', app.currentLootbox.remainingTries);
+        } catch (error) {
+            console.error('Error updating participated group box in Firebase:', error);
         }
-    },
+        
+        // Update localStorage backup
+        try {
+            localStorage.setItem('participatedGroupBoxes', JSON.stringify(app.participatedGroupBoxes));
+        } catch (error) {
+            console.error('Error updating participated group boxes in localStorage:', error);
+        }
+        
+        console.log('Synced Group Box data:', app.currentLootbox.name, 
+                   'Opens:', app.currentLootbox.spins, 
+                   'Remaining:', app.currentLootbox.remainingTries);
+    }
+},
 
     async favoriteGroupBox(groupBoxId) {
         // Find the group box in the participated array
