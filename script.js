@@ -88,9 +88,9 @@ async initializeApp() {
                 }
                 
                 // Add default lootbox if none exist
-                if (this.lootboxes.length === 0) {
-                    await this.createDefaultLootbox();
-                }
+                //if (this.lootboxes.length === 0) {
+                //    await this.createDefaultLootbox();
+                //}
                 
                 this.renderLootboxes();
                 resolve();

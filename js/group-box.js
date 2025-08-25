@@ -703,88 +703,172 @@ const GroupBoxExtension = {
     },
 
     deleteGroupBox(groupBoxId) {
-        const groupBox = app.participatedGroupBoxes.find(gb => gb.groupBoxId === groupBoxId);
+    const groupBox = app.participatedGroupBoxes.find(gb => gb.groupBoxId === groupBoxId);
+    
+    if (groupBox) {
+        const groupBoxName = groupBox.groupBoxName || groupBox.lootboxData?.name || 'Group Box';
         
-        if (groupBox) {
-            const groupBoxName = groupBox.groupBoxName || groupBox.lootboxData?.name || 'Group Box';
-            
-            // Show custom delete confirmation modal
+        // Store the group box ID for deletion
+        app.pendingDeleteGroupBoxId = groupBoxId;
+        
+        // Check if user is creator
+        if (groupBox.isCreator) {
+            // Show creator choice modal
+            document.getElementById('creatorDeleteBoxName').textContent = groupBoxName;
+            document.getElementById('creatorDeleteModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        } else {
+            // Regular participant - show normal delete modal
             document.getElementById('deleteLootboxName').textContent = groupBoxName;
             document.getElementById('deleteModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            
-            // Store the group box ID for the actual deletion
-            app.pendingDeleteGroupBoxId = groupBoxId;
         }
-    },
+    }
+},
 
-    async confirmDeleteGroupBox() {
-        const groupBoxId = app.pendingDeleteGroupBoxId;
-        if (!groupBoxId) return;
-        
-        const groupBox = app.participatedGroupBoxes.find(gb => gb.groupBoxId === groupBoxId);
-        const groupBoxName = groupBox ? (groupBox.groupBoxName || groupBox.lootboxData?.name || 'Group Box') : 'Group Box';
-        
-        // Close modal first
-        app.closeDeleteModal();
-        
-        try {
-            // Record leave event in community history first
-            if (app.isFirebaseReady && window.firebaseDb && window.firebaseAuth && window.firebaseFunctions) {
-                const currentUser = window.firebaseAuth.currentUser;
-                if (currentUser) {
-                    // Record leave event for community history
-                    const { collection, addDoc, doc, deleteDoc } = window.firebaseFunctions;
-                    const userId = currentUser.uid;
-                    const userName = userId === 'anonymous' ? 'Anonymous User' : `User ${userId.substring(0, 8)}`;
-                    
-                    // Don't record leave event for creators who are just removing their own organizer-only box
-                    const isOrganizerOnly = groupBox && groupBox.isOrganizerOnly && groupBox.isCreator;
-                    
-                    if (!isOrganizerOnly) {
-                        const leaveData = {
-                            userId: userId,
-                            userName: userName,
-                            item: null, // Special marker for leave events
-                            action: 'leave',
-                            timestamp: new Date(),
-                            sessionId: Date.now().toString()
-                        };
-                        
-                        await addDoc(collection(window.firebaseDb, 'group_boxes', groupBoxId, 'opens'), leaveData);
-                        console.log('Recorded leave event for:', userName);
-                    }
-                    
-                    // Delete from user's participated group boxes
-                    const participatedRef = doc(window.firebaseDb, 'users', currentUser.uid, 'participated_group_boxes', groupBoxId);
-                    await deleteDoc(participatedRef);
-                    console.log('Deleted Group Box from Firebase:', groupBoxId);
-                }
+closeCreatorDeleteModal() {
+    document.getElementById('creatorDeleteModal').classList.remove('show');
+    document.body.style.overflow = '';
+    app.pendingDeleteGroupBoxId = undefined;
+},
+
+async deleteForEveryone() {
+    const groupBoxId = app.pendingDeleteGroupBoxId;
+    if (!groupBoxId) return;
+    
+    const groupBox = app.participatedGroupBoxes.find(gb => gb.groupBoxId === groupBoxId);
+    const groupBoxName = groupBox ? (groupBox.groupBoxName || 'Group Box') : 'Group Box';
+    
+    app.closeCreatorDeleteModal();
+    
+    try {
+        if (app.isFirebaseReady && window.firebaseDb && window.firebaseFunctions) {
+            const currentUser = window.firebaseAuth.currentUser;
+            if (currentUser) {
+                const { doc, deleteDoc } = window.firebaseFunctions;
+                
+                // Delete the main group box document
+                const groupBoxRef = doc(window.firebaseDb, 'group_boxes', groupBoxId);
+                await deleteDoc(groupBoxRef);
+                console.log('Deleted main group box for everyone:', groupBoxId);
+                
+                // Delete from user's participated list
+                const participatedRef = doc(window.firebaseDb, 'users', currentUser.uid, 'participated_group_boxes', groupBoxId);
+                await deleteDoc(participatedRef);
             }
-            
-            // Remove from local array
-            const groupBoxIndex = app.participatedGroupBoxes.findIndex(gb => gb.groupBoxId === groupBoxId);
-            if (groupBoxIndex >= 0) {
-                app.participatedGroupBoxes.splice(groupBoxIndex, 1);
-            }
-            
-            // Update localStorage
-            localStorage.setItem('participatedGroupBoxes', JSON.stringify(app.participatedGroupBoxes));
-            
-            // Re-render the lootboxes
-            app.renderLootboxes();
-            
-            // Show success message
-            app.showSuccessMessage(`"${groupBoxName}" has been removed from your participated Group Boxes`);
-            
-        } catch (error) {
-            console.error('Error deleting Group Box:', error);
-            app.showSuccessMessage('Error removing Group Box', true);
         }
         
-        // Clear pending delete
-        app.pendingDeleteGroupBoxId = undefined;
-    },
+        // Remove from local array
+        const groupBoxIndex = app.participatedGroupBoxes.findIndex(gb => gb.groupBoxId === groupBoxId);
+        if (groupBoxIndex >= 0) {
+            app.participatedGroupBoxes.splice(groupBoxIndex, 1);
+        }
+        
+        localStorage.setItem('participatedGroupBoxes', JSON.stringify(app.participatedGroupBoxes));
+        app.renderLootboxes();
+        app.showSuccessMessage(`"${groupBoxName}" deleted for all participants`);
+        
+    } catch (error) {
+        console.error('Error deleting Group Box:', error);
+        app.showSuccessMessage('Error deleting Group Box', true);
+    }
+    
+    app.pendingDeleteGroupBoxId = undefined;
+},
+
+async deleteJustForMe() {
+    const groupBoxId = app.pendingDeleteGroupBoxId;
+    if (!groupBoxId) return;
+    
+    const groupBox = app.participatedGroupBoxes.find(gb => gb.groupBoxId === groupBoxId);
+    const groupBoxName = groupBox ? (groupBox.groupBoxName || 'Group Box') : 'Group Box';
+    
+    app.closeCreatorDeleteModal();
+    
+    try {
+        if (app.isFirebaseReady && window.firebaseDb && window.firebaseFunctions) {
+            const currentUser = window.firebaseAuth.currentUser;
+            if (currentUser) {
+                const { doc, deleteDoc } = window.firebaseFunctions;
+                
+                // Only delete from user's participated list
+                const participatedRef = doc(window.firebaseDb, 'users', currentUser.uid, 'participated_group_boxes', groupBoxId);
+                await deleteDoc(participatedRef);
+                console.log('Removed group box from personal view:', groupBoxId);
+            }
+        }
+        
+        // Remove from local array
+        const groupBoxIndex = app.participatedGroupBoxes.findIndex(gb => gb.groupBoxId === groupBoxId);
+        if (groupBoxIndex >= 0) {
+            app.participatedGroupBoxes.splice(groupBoxIndex, 1);
+        }
+        
+        localStorage.setItem('participatedGroupBoxes', JSON.stringify(app.participatedGroupBoxes));
+        app.renderLootboxes();
+        app.showSuccessMessage(`"${groupBoxName}" removed from your view`);
+        
+    } catch (error) {
+        console.error('Error removing Group Box:', error);
+        app.showSuccessMessage('Error removing Group Box', true);
+    }
+    
+    app.pendingDeleteGroupBoxId = undefined;
+},
+
+async confirmDeleteGroupBox() {
+    // This handles non-creator deletions
+    const groupBoxId = app.pendingDeleteGroupBoxId;
+    if (!groupBoxId) return;
+    
+    const groupBox = app.participatedGroupBoxes.find(gb => gb.groupBoxId === groupBoxId);
+    const groupBoxName = groupBox ? (groupBox.groupBoxName || 'Group Box') : 'Group Box';
+    
+    app.closeDeleteModal();
+    
+    try {
+        if (app.isFirebaseReady && window.firebaseDb && window.firebaseFunctions) {
+            const currentUser = window.firebaseAuth.currentUser;
+            if (currentUser) {
+                const { collection, addDoc, doc, deleteDoc } = window.firebaseFunctions;
+                const userId = currentUser.uid;
+                const userName = userId === 'anonymous' ? 'Anonymous User' : `User ${userId.substring(0, 8)}`;
+                
+                // Record leave event
+                const leaveData = {
+                    userId: userId,
+                    userName: userName,
+                    item: null,
+                    action: 'leave',
+                    timestamp: new Date(),
+                    sessionId: Date.now().toString()
+                };
+                
+                await addDoc(collection(window.firebaseDb, 'group_boxes', groupBoxId, 'opens'), leaveData);
+                
+                // Delete from user's participated list
+                const participatedRef = doc(window.firebaseDb, 'users', currentUser.uid, 'participated_group_boxes', groupBoxId);
+                await deleteDoc(participatedRef);
+            }
+        }
+        
+        // Remove from local array
+        const groupBoxIndex = app.participatedGroupBoxes.findIndex(gb => gb.groupBoxId === groupBoxId);
+        if (groupBoxIndex >= 0) {
+            app.participatedGroupBoxes.splice(groupBoxIndex, 1);
+        }
+        
+        localStorage.setItem('participatedGroupBoxes', JSON.stringify(app.participatedGroupBoxes));
+        app.renderLootboxes();
+        app.showSuccessMessage(`Left "${groupBoxName}" Group Box`);
+        
+    } catch (error) {
+        console.error('Error leaving Group Box:', error);
+        app.showSuccessMessage('Error leaving Group Box', true);
+    }
+    
+    app.pendingDeleteGroupBoxId = undefined;
+},
 
     async loadCommunityHistory(groupBoxId) {
         try {

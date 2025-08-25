@@ -165,6 +165,36 @@
         </div>
     </div>
 
+    <!-- Creator Delete Choice Modal -->
+    <div id="creatorDeleteModal" class="modal">
+        <div class="modal-content delete-modal-content">
+            <div class="delete-modal-header">
+                <h3>Delete Group Box</h3>
+            </div>
+            <div class="delete-modal-body">
+                <p>You created <strong id="creatorDeleteBoxName"></strong></p>
+                <p>How would you like to delete it?</p>
+                <div class="share-options" style="margin-top: 20px;">
+                    <button class="share-option-btn" onclick="app.deleteForEveryone()" style="border-color: #ef4444;">
+                        <div class="share-option-content">
+                            <h4 style="color: #dc2626;">Delete for Everyone</h4>
+                            <p>Permanently delete this Group Box for all participants</p>
+                        </div>
+                    </button>
+                    <button class="share-option-btn" onclick="app.deleteJustForMe()">
+                        <div class="share-option-content">
+                            <h4>Remove from My View</h4>
+                            <p>Hide this Group Box from your view only</p>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            <div class="delete-modal-footer">
+                <button class="btn btn-secondary" onclick="app.closeCreatorDeleteModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Share Options Modal -->
     <div id="shareModal" class="modal">
         <div class="modal-content share-modal-content">
