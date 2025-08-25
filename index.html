@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lootbox Creator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <button class="hamburger-menu" onclick="showMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <h1 class="title">Lootbox Creator 1.4 Join Restore</h1>
+        </div>
+    </div>
+
+    <!-- Main List View -->
+    <div id="listView" class="container">
+        <div class="filter-section">
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="favorites">Favorites</button>
+                <button class="filter-btn" data-filter="shared">Shared</button>
+            </div>
+        </div>
+
+        <div id="lootboxGrid" class="lootbox-grid">
+            <!-- Lootboxes will be dynamically added here -->
+        </div>
+
+        <div id="emptyState" class="empty-state hidden">
+            <h3>No Lootboxes Yet</h3>
+            <p>Create your first lootbox to get started!</p>
+        </div>
+    </div>
+
+    <!-- Individual Lootbox View -->
+    <div id="lootboxView" class="container hidden">
+        <button class="back-btn" onclick="showListView()">←</button>
+        
+        <div class="lootbox-view">
+            <h2 id="lootboxTitle">Default Lootbox</h2>
+            <div class="tries-info" id="triesInfo">Unlimited tries</div>
+            
+            <div class="lootbox-circle" id="lootboxCircle">
+                <button id="openButton" aria-label="Open lootbox"></button>
+            </div>
+            
+            <div id="lootboxItems" class="lootbox-items">
+                <!-- Items will be populated here -->
+            </div>
+        </div>
+
+        <!-- Session History Section -->
+        <div id="sessionHistory" class="session-history">
+            <div id="sessionToggle" class="session-toggle" onclick="toggleSessionHistory()">
+                <h3>Session History</h3>
+                <button id="toggleButton" class="toggle-button">▶</button>
+            </div>
+            <div id="sessionContent" class="session-content collapsed">
+                <div id="sessionStats" class="session-stats">
+                    <div class="stat-item">Total Pulls: <span id="totalPulls">0</span></div>
+                </div>
+                <div id="historyList" class="history-list">
+                    <div class="no-history">No pulls yet this session</div>
+                </div>
+                <div class="history-controls">
+                    <button class="btn btn-secondary" onclick="app.clearHistory()">Clear History</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Add Button -->
+    <button class="nav-btn add-btn" onclick="createNewLootbox()">+</button>
+
+    <!-- Create/Edit Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">Create New Lootbox</h3>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Lootbox Name</label>
+                    <input type="text" id="lootboxName" class="form-input" placeholder="Enter lootbox name">
+                    <div id="nameError" class="error-message hidden">Please enter a lootbox name</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Chest Image</label>
+                    <div class="chest-selection" id="chestSelection">
+                        <!-- Chest options will be populated dynamically -->
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="revealContents" checked>
+                        <label>Reveal Contents</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="revealOdds" checked>
+                        <label>Reveal Odds</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="unlimitedTries" checked>
+                        <label>Unlimited Tries</label>
+                    </div>
+                </div>
+
+                <div class="form-group" id="maxTriesGroup" style="display: none;">
+                    <label class="form-label">Max Tries</label>
+                    <input type="number" id="maxTries" class="form-input" value="10" min="1">
+                </div>
+
+                <div class="items-section">
+                    <div class="items-header">
+                        <h4>Items & Odds</h4>
+                        <button class="add-item-btn" onclick="addItemRow()">+ Add Item</button>
+                    </div>
+                    <div id="itemsList">
+                        <!-- Items will be added here -->
+                    </div>
+                    <div id="itemsError" class="error-message hidden">Must have at least one item</div>
+                    <div class="odds-total">
+                        <button class="even-odds-btn" onclick="evenlyDistributeOdds()" title="Evenly distribute odds across all items">Equalize</button>
+                        <button class="even-odds-btn" onclick="randomizeOdds()" title="Randomly distribute odds across all items">Randomize</button>
+                        Total odds: <span id="totalOdds">0.000</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveLootbox()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Popup -->
+    <div id="resultPopup" class="result-popup">
+        <!--<h3>You got:</h3>-->
+        <div id="resultItem" class="result-item"></div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content delete-modal-content">
+            <div class="delete-modal-header">
+                <h3>Delete Lootbox</h3>
+            </div>
+            <div class="delete-modal-body">
+                <p>Are you sure you want to delete <strong id="deleteLootboxName"></strong>?</p>
+                <p class="delete-warning">This action cannot be undone.</p>
+            </div>
+            <div class="delete-modal-footer">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Options Modal -->
+    <div id="shareModal" class="modal">
+        <div class="modal-content share-modal-content">
+            <div class="share-modal-header">
+                <h3>Share Options</h3>
+                <button class="close-btn" onclick="closeShareModal()">&times;</button>
+            </div>
+            <div class="share-modal-body">
+                <p>Choose how you want to share <strong id="shareLootboxName"></strong>:</p>
+                <div class="share-options">
+                    <button class="share-option-btn" onclick="shareAsLootbox()">
+                        <img src="assets/graphics/share.png" alt="Share" class="share-option-icon">
+                        <div class="share-option-content">
+                            <h4>Share Lootbox</h4>
+                            <p>Share as a personal lootbox that others can import</p>
+                        </div>
+                    </button>
+                    <button class="share-option-btn" onclick="shareAsGroupBox()">
+                        <img src="assets/graphics/groupBoxImage.png" alt="Group Box" class="share-option-icon">
+                        <div class="share-option-content">
+                            <h4>Group Box</h4>
+                            <p>Create a shared copy that others can open together</p>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            <div class="share-modal-footer">
+                <button class="btn btn-secondary" onclick="closeShareModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group Box Creation Modal -->
+    <div id="groupBoxModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Create Group Box</h3>
+                <button class="close-btn" onclick="closeGroupBoxModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Group Box Name</label>
+                    <input type="text" id="groupBoxName" class="form-input" placeholder="Enter group box name">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Tries per person</label>
+                    <input type="number" id="triesPerPerson" class="form-input" value="3" min="1" max="10">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Expires in</label>
+                    <select id="expiresIn" class="form-input">
+                        <option value="24">24 hours</option>
+                        <option value="72">3 days</option>
+                        <option value="168">1 week</option>
+                        <option value="never">Never</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="creatorParticipates" checked>
+                        <label>Creator participates (gets tries)</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="hideContents" checked>
+                        <label>Hide contents from recipients</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="hideOdds" checked>
+                        <label>Hide odds from recipients</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeGroupBoxModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="createGroupBox()">Create Group Box</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group Box Edit Modal -->
+    <div id="groupBoxEditModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Edit Group Box</h3>
+                <button class="close-btn" onclick="closeGroupBoxEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <h4 id="editGroupBoxName">Group Box Name</h4>
+                </div>
+
+                <div class="edit-section">
+                    <div class="edit-section-header">
+                        <h4>Items & Odds</h4>
+                        <button class="add-edit-item-btn" onclick="app.addEditItem()" type="button">+ Add Item</button>
+                    </div>
+                    <div id="editItemsList" class="edit-items-list">
+                        <!-- Items will be populated here -->
+                    </div>
+                    <div class="edit-odds-total">
+                        <button class="even-odds-btn" onclick="app.evenlyDistributeEditOdds()" type="button" title="Evenly distribute odds across all items">Equalize</button>
+                        <span>Total odds: <span id="editTotalOdds">0.000</span></span>
+                    </div>
+                </div>
+
+                <div class="edit-section">
+                    <h4>Participants</h4>
+                    <div id="editUsersList" class="edit-users-list">
+                        <!-- Users will be populated here -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeGroupBoxEditModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="app.saveGroupBoxChanges()" type="button">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Message -->
+    <div id="successMessage" class="success-message">
+        <div class="success-content">
+            <div class="success-icon">✅</div>
+            <span id="successText"></span>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="script.js"></script>
+    <script src="js/group-box.js"></script>
+    <script src="js/ui-renderer.js"></script>
+
+    <!-- Firebase CDN imports -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
+        import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
+        import { getFirestore, collection, addDoc, getDocs, getDoc, query, where, doc, setDoc, updateDoc, deleteDoc, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDX_7gT2YHIQnJ9Svna0-t-skJ7qNnygWM",
+            authDomain: "lootbox-creator.firebaseapp.com",
+            projectId: "lootbox-creator",
+            storageBucket: "lootbox-creator.firebasestorage.app",
+            messagingSenderId: "222437059752",
+            appId: "1:222437059752:web:f759d88598023b60c1a69d",
+            measurementId: "G-2NQVKW2XP6"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // Make Firebase instances and functions globally available
+        window.firebaseAuth = auth;
+        window.firebaseDb = db;
+        window.firebaseFunctions = {
+            collection,
+            addDoc,
+            getDocs,
+            getDoc,
+            query,
+            where,
+            doc,
+            setDoc,
+            updateDoc,
+            deleteDoc,
+            orderBy,
+            limit
+        };
+
+        // Sign in anonymously and perform smoke test
+        async function initFirebase() {
+            try {
+                // Anonymous sign in
+                const userCredential = await signInAnonymously(auth);
+                const uid = userCredential.user.uid;
+                console.log('Signed in anonymously with uid:', uid);
+
+                // Firestore smoke test - write data
+                const testData = {
+                    hello: 'world',
+                    uid: uid,
+                    timestamp: new Date()
+                };
+                
+                const docRef = await addDoc(collection(db, 'tests'), testData);
+                console.log('Document written with ID:', docRef.id);
+
+                // Firestore smoke test - read data back
+                const querySnapshot = await getDocs(collection(db, 'tests'));
+                querySnapshot.forEach((doc) => {
+                    console.log('Read document:', doc.id, '=>', doc.data());
+                });
+
+            } catch (error) {
+                console.error('Firebase error:', error);
+            }
+        }
+
+        // Initialize Firebase on page load
+        initFirebase();
+    </script>
+</body>
+</html>
