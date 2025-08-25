@@ -836,37 +836,38 @@ attachEventListeners() {
     }
 
     showListView() {
-        // Sync Group Box data if returning from a Group Box session
-        if (this.currentLootbox && this.currentLootbox.isGroupBox) {
-            this.syncParticipatedGroupBoxData();
-        }
-        
-        document.getElementById('lootboxView').classList.add('hidden');
-        document.getElementById('listView').classList.remove('hidden');
-        
-        // Clear session and community history when leaving lootbox view
-        this.sessionHistory = [];
-        this.communityHistory = [];
-        this.updateSessionDisplay();
-        
-        // Reset cooldown and hide popup when leaving lootbox view
-        this.isOnCooldown = false;
-        if (this.popupTimeout) {
-            clearTimeout(this.popupTimeout);
-            this.popupTimeout = null;
-        }
-        const popup = document.getElementById('resultPopup');
-        if (popup) {
-            popup.classList.remove('show');
-        }
-        
-        // Reset organizer readonly flag
-        this.isOrganizerReadonly = false;
-        
-        this.currentLootbox = null;
-        
-        // Refresh the lootbox list to ensure group boxes are visible
-        this.renderLootboxes();
+    // Sync Group Box data if returning from a Group Box session
+    if (this.currentLootbox && this.currentLootbox.isGroupBox) {
+        this.syncParticipatedGroupBoxData();
+    }
+    
+    // Clear the current lootbox AFTER syncing
+    this.currentLootbox = null;
+    
+    document.getElementById('lootboxView').classList.add('hidden');
+    document.getElementById('listView').classList.remove('hidden');
+    
+    // Clear session and community history when leaving lootbox view
+    this.sessionHistory = [];
+    this.communityHistory = [];
+    this.updateSessionDisplay();
+    
+    // Reset cooldown and hide popup when leaving lootbox view
+    this.isOnCooldown = false;
+    if (this.popupTimeout) {
+        clearTimeout(this.popupTimeout);
+        this.popupTimeout = null;
+    }
+    const popup = document.getElementById('resultPopup');
+    if (popup) {
+        popup.classList.remove('show');
+    }
+    
+    // Reset organizer readonly flag
+    this.isOrganizerReadonly = false;
+    
+    // Refresh the lootbox list to ensure group boxes are visible
+    this.renderLootboxes();
     }
 
     showMenu() {

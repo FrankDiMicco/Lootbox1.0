@@ -606,6 +606,11 @@ const GroupBoxExtension = {
         gb => gb.groupBoxId === app.currentLootbox.groupBoxId
     );
     
+    // Only sync if the group box still exists in the array (hasn't been deleted)
+    if (groupBoxIndex === -1) {
+        console.log('Group box no longer in participated list, skipping sync');
+        return;
+    }
     if (groupBoxIndex >= 0) {
         // Update the local data with current session data
         app.participatedGroupBoxes[groupBoxIndex].userTotalOpens = app.currentLootbox.spins;
