@@ -1029,28 +1029,43 @@ attachEventListeners() {
     }
 
     async loadParticipatedGroupBoxes() {
-        // Try to load from Firebase first, fallback to localStorage
-        if (this.isFirebaseReady && window.firebaseDb && window.firebaseAuth && window.firebaseFunctions) {
-            try {
-                const currentUser = window.firebaseAuth.currentUser;
-                if (currentUser) {
-                    const { collection, getDocs, query, where } = window.firebaseFunctions;
+    // Try to load from Firebase first, fallback to localStorage
+    if (this.isFirebaseReady && window.firebaseDb && window.firebaseAuth && window.firebaseFunctions) {
+        try {
+            const currentUser = window.firebaseAuth.currentUser;
+            if (currentUser) {
+                const { collection, getDocs, query, where, doc, getDoc } = window.firebaseFunctions;
+                
+                // Query 1: Boxes where participants contains my uid
+                const participatedRef = collection(window.firebaseDb, 'users', currentUser.uid, 'participated_group_boxes');
+                const participatedSnapshot = await getDocs(participatedRef);
+                const participatedBoxes = [];
+                
+                for (const docSnap of participatedSnapshot.docs) {
+                    const data = docSnap.data();
                     
-                    // Query 1: Boxes where participants contains my uid
-                    const participatedRef = collection(window.firebaseDb, 'users', currentUser.uid, 'participated_group_boxes');
-                    const participatedSnapshot = await getDocs(participatedRef);
-                    const participatedBoxes = [];
+                    // Check if the group box still exists in the main collection
+                    const groupBoxRef = doc(window.firebaseDb, 'group_boxes', data.groupBoxId);
+                    const groupBoxSnap = await getDoc(groupBoxRef);
                     
-                    participatedSnapshot.forEach((doc) => {
-                        const data = doc.data();
+                    if (groupBoxSnap.exists()) {
+                        // Only add if the group box still exists
                         participatedBoxes.push({ 
-                            id: doc.id, 
+                            id: docSnap.id, 
                             ...data,
                             isGroupBox: true
                         });
-                    });
-                    
-                    console.log(`Loaded ${participatedBoxes.length} participated group boxes`);
+                    } else {
+                        // Optionally clean up the orphaned reference
+                        console.log(`Group box ${data.groupBoxId} no longer exists, skipping`);
+                        // You could delete the orphaned reference here if you want
+                        // await deleteDoc(doc(window.firebaseDb, 'users', currentUser.uid, 'participated_group_boxes', docSnap.id));
+                    }
+                }
+                
+                console.log(`Loaded ${participatedBoxes.length} participated group boxes`);
+                
+                // The rest of your existing code for organizer-only boxes...
                     
                     // Query 2: Boxes where createdBy == my uid AND organizerOnly == true
                     const organizerRef = collection(window.firebaseDb, 'group_boxes');
