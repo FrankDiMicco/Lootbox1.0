@@ -617,7 +617,7 @@ const GroupBoxExtension = {
             if (app.isFirebaseReady && window.firebaseDb && window.firebaseAuth && window.firebaseFunctions) {
                 const currentUser = window.firebaseAuth.currentUser;
                 if (currentUser) {
-                    const { doc, updateDoc } = window.firebaseFunctions;
+                    const { doc, setDoc } = window.firebaseFunctions;
                     const participatedRef = doc(
                         window.firebaseDb, 
                         'users', 
@@ -626,11 +626,12 @@ const GroupBoxExtension = {
                         app.currentLootbox.groupBoxId
                     );
                     
-                    await updateDoc(participatedRef, {
+                    // Use setDoc with merge:true to only update these specific fields
+                    await setDoc(participatedRef, {
                         userTotalOpens: app.currentLootbox.spins,
                         userRemainingTries: app.currentLootbox.remainingTries,
                         lastParticipated: new Date()
-                    });
+                    }, { merge: true });
                     
                     console.log('Updated participated group box in Firebase');
                 }
