@@ -23,6 +23,11 @@ const UIRenderer = {
         if (window.app.currentFilter === 'all') {
             // Show both personal lootboxes and participated group boxes
             filteredLootboxes = [...window.app.lootboxes, ...window.app.participatedGroupBoxes];
+        } else if (window.app.currentFilter === 'new') {
+            // Show only new (unopened) lootboxes and group boxes
+            const newLootboxes = window.app.lootboxes.filter(lootbox => (lootbox.spins || 0) === 0);
+            const newGroupBoxes = window.app.participatedGroupBoxes.filter(groupBox => (groupBox.userTotalOpens || 0) === 0 && !groupBox.isOrganizerOnly);
+            filteredLootboxes = [...newLootboxes, ...newGroupBoxes];
         } else if (window.app.currentFilter === 'favorites') {
             // Show favorited personal lootboxes and favorited group boxes
             const favoriteLootboxes = window.app.lootboxes.filter(lootbox => lootbox.favorite);
@@ -46,6 +51,9 @@ const UIRenderer = {
             if (window.app.currentFilter === 'shared') {
                 emptyTitle.textContent = 'No Shared Group Boxes Yet';
                 emptyText.textContent = 'Share a lootbox as a Group Box to get started!';
+            } else if (window.app.currentFilter === 'new') {
+                emptyTitle.textContent = 'No New Lootboxes';
+                emptyText.textContent = 'All your lootboxes have been opened!';
             } else if (window.app.currentFilter === 'favorites') {
                 emptyTitle.textContent = 'No Favorite Lootboxes Yet';
                 emptyText.textContent = 'Mark lootboxes as favorites to see them here!';
