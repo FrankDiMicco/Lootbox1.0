@@ -312,10 +312,12 @@ const UIRenderer = {
         // Update total pulls
         totalPulls.textContent = historyData.length;
         
-        // Generate item counts for stats
+        // Generate item counts for stats (excluding null items)
         const itemCounts = {};
         historyData.forEach(entry => {
-            itemCounts[entry.item] = (itemCounts[entry.item] || 0) + 1;
+            if (entry.item && entry.item !== null && entry.item !== 'null') {
+                itemCounts[entry.item] = (itemCounts[entry.item] || 0) + 1;
+            }
         });
         
         // Update stats section
@@ -345,6 +347,11 @@ const UIRenderer = {
         
         // Add history items
         historyData.forEach(entry => {
+            // Skip entries with null items (unless they're join/leave events)
+            if (!entry.action && (entry.item === null || entry.item === undefined || entry.item === 'null')) {
+                return; // Skip this entry
+            }
+            
             const historyItem = document.createElement('div');
             historyItem.className = 'history-item';
             
@@ -357,22 +364,27 @@ const UIRenderer = {
                         <span class="history-item-time">${entry.timestamp.toLocaleTimeString()}</span>
                     `;
                     historyItem.classList.add('join-history-item');
-                } else if (entry.action === 'leave' || entry.item === null) {
+                } else if (entry.action === 'leave') {
                     // Show leave format: "UserName has left the box."
                     historyItem.innerHTML = `
                         <span class="history-item-name leave-event">${entry.userName} has left the box.</span>
                         <span class="history-item-time">${entry.timestamp.toLocaleTimeString()}</span>
                     `;
                     historyItem.classList.add('leave-history-item');
-                } else {
-                    // Show community format: "UserName got: ItemName"
+                } else if (entry.item) {
+                    // Show community format: "UserName got: ItemName" (only if item exists)
                     historyItem.innerHTML = `
                         <span class="history-item-name">${entry.userName} got: ${entry.item}</span>
                         <span class="history-item-time">${entry.timestamp.toLocaleTimeString()}</span>
                     `;
+                } else {
+                    return; // Skip entries with no item and no action
                 }
             } else {
-                // Show personal format: "You got: ItemName"
+                // Show personal format: "You got: ItemName" (only if item exists)
+                if (!entry.item) {
+                    return; // Skip entries with no item
+                }
                 historyItem.innerHTML = `
                     <span class="history-item-name">You got: ${entry.item}</span>
                     <span class="history-item-time">${entry.timestamp.toLocaleTimeString()}</span>
