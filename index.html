@@ -328,81 +328,37 @@
     <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
+    <!-- Legacy scripts for backward compatibility -->
     <script src="script.js"></script>
     <script src="js/group-box.js"></script>
     <script src="js/ui-renderer.js"></script>
 
-    <!-- Firebase CDN imports -->
+    <!-- Modern modular architecture -->
+    <!-- 1. Services (data and external integrations) -->
+    <script type="module" src="src/services/FirebaseService.js"></script>
+    <script type="module" src="src/services/StorageService.js"></script>
+
+    <!-- 2. Models (data structures and validation) -->
+    <script type="module" src="src/models/Lootbox.js"></script>
+    <script type="module" src="src/models/GroupBox.js"></script>
+
+    <!-- 3. Views (UI components) -->
+    <script type="module" src="src/views/components/LootboxCard.js"></script>
+    <script type="module" src="src/views/components/GroupBoxCard.js"></script>
+
+    <!-- 4. Controllers (business logic) -->
+    <script type="module" src="src/controllers/LootboxController.js"></script>
+    <script type="module" src="src/controllers/GroupBoxController.js"></script>
+
+    <!-- 5. Core App (orchestration and initialization) -->
     <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
-        import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
-        import { getFirestore, collection, addDoc, getDocs, getDoc, query, where, doc, setDoc, updateDoc, deleteDoc, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyDX_7gT2YHIQnJ9Svna0-t-skJ7qNnygWM",
-            authDomain: "lootbox-creator.firebaseapp.com",
-            projectId: "lootbox-creator",
-            storageBucket: "lootbox-creator.firebasestorage.app",
-            messagingSenderId: "222437059752",
-            appId: "1:222437059752:web:f759d88598023b60c1a69d",
-            measurementId: "G-2NQVKW2XP6"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        import App from './src/core/App.js';
         
-        // Make Firebase instances and functions globally available
-        window.firebaseAuth = auth;
-        window.firebaseDb = db;
-        window.firebaseFunctions = {
-            collection,
-            addDoc,
-            getDocs,
-            getDoc,
-            query,
-            where,
-            doc,
-            setDoc,
-            updateDoc,
-            deleteDoc,
-            orderBy,
-            limit
-        };
-
-        // Sign in anonymously and perform smoke test
-        async function initFirebase() {
-            try {
-                // Anonymous sign in
-                const userCredential = await signInAnonymously(auth);
-                const uid = userCredential.user.uid;
-                console.log('Signed in anonymously with uid:', uid);
-
-                // Firestore smoke test - write data
-                const testData = {
-                    hello: 'world',
-                    uid: uid,
-                    timestamp: new Date()
-                };
-                
-                const docRef = await addDoc(collection(db, 'tests'), testData);
-                console.log('Document written with ID:', docRef.id);
-
-                // Firestore smoke test - read data back
-                const querySnapshot = await getDocs(collection(db, 'tests'));
-                querySnapshot.forEach((doc) => {
-                    console.log('Read document:', doc.id, '=>', doc.data());
-                });
-
-            } catch (error) {
-                console.error('Firebase error:', error);
-            }
-        }
-
-        // Initialize Firebase on page load
-        initFirebase();
+        // Initialize the new modular app
+        window.modernApp = new App();
+        
+        // Maintain backward compatibility by keeping the old app reference
+        // The new App will extend itself with legacy methods for compatibility
     </script>
 </body>
 </html>
