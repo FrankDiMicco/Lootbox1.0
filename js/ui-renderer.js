@@ -24,9 +24,9 @@ const UIRenderer = {
             // Show both personal lootboxes and participated group boxes
             filteredLootboxes = [...window.app.lootboxes, ...window.app.participatedGroupBoxes];
         } else if (window.app.currentFilter === 'new') {
-            // Show only new (unopened) lootboxes and group boxes
-            const newLootboxes = window.app.lootboxes.filter(lootbox => (lootbox.spins || 0) === 0);
-            const newGroupBoxes = window.app.participatedGroupBoxes.filter(groupBox => (groupBox.userTotalOpens || 0) === 0 && !groupBox.isOrganizerOnly);
+            // Show only new (not viewed) lootboxes and group boxes
+            const newLootboxes = window.app.lootboxes.filter(lootbox => !lootbox.hasBeenViewed);
+            const newGroupBoxes = window.app.participatedGroupBoxes.filter(groupBox => !groupBox.hasBeenViewed && !groupBox.isOrganizerOnly);
             filteredLootboxes = [...newLootboxes, ...newGroupBoxes];
         } else if (window.app.currentFilter === 'favorites') {
             // Show favorited personal lootboxes and favorited group boxes
@@ -146,7 +146,7 @@ const UIRenderer = {
                 
                 return `
                 <div class="lootbox-card group-box-card${lootbox.isOrganizerOnly ? ' organizer-only' : ''}" onclick="app.openGroupBoxFromList('${lootbox.groupBoxId}')">
-                    ${(lootbox.userTotalOpens || 0) === 0 && !lootbox.isOrganizerOnly ? '<div class="new-box-badge"><span class="new-box-label">New Box</span></div>' : ''}
+                    ${!lootbox.hasBeenViewed && !lootbox.isOrganizerOnly ? '<div class="new-box-badge"><span class="new-box-label">New Box</span></div>' : ''}
                     <div class="group-box-badge">
                         <img src="assets/graphics/groupBoxImage.png" alt="Group Box" class="group-box-icon">
                         Group Box
@@ -189,7 +189,7 @@ const UIRenderer = {
                 
                 return `
                 <div class="lootbox-card" onclick="app.openLootbox(${originalIndex})">
-                    ${(lootbox.spins || 0) === 0 ? '<div class="new-box-badge"><span class="new-box-label">New Box</span></div>' : ''}
+                    ${!lootbox.hasBeenViewed ? '<div class="new-box-badge"><span class="new-box-label">New Box</span></div>' : ''}
                     <div class="lootbox-preview" style="background-image: url('${chestImage}')"></div>
                     <div class="lootbox-info">
                         <h3>${lootbox.name}</h3>

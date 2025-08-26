@@ -587,6 +587,13 @@ const GroupBoxExtension = {
             isCreator: groupBox?.isCreator
         });
         
+        // Mark as viewed (no longer new)
+        if (groupBox && !groupBox.hasBeenViewed) {
+            groupBox.hasBeenViewed = true;
+            // Save the viewed status to localStorage
+            localStorage.setItem('participatedGroupBoxes', JSON.stringify(app.participatedGroupBoxes));
+        }
+        
         // Always navigate to group box screen - don't block navigation
         await app.loadAndOpenGroupBox(groupBoxId);
     },

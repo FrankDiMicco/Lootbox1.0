@@ -338,6 +338,12 @@ attachEventListeners() {
         this.currentLootbox = this.lootboxes[index];
         this.currentLootboxIndex = index;
         
+        // Mark as viewed (no longer new)
+        if (!this.currentLootbox.hasBeenViewed) {
+            this.currentLootbox.hasBeenViewed = true;
+            this.saveLootboxes(); // Save the viewed status
+        }
+        
         // Clear session history when opening a new lootbox
         this.sessionHistory = [];
         
