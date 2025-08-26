@@ -125,7 +125,12 @@ const UIRenderer = {
                     userRemainingTries: lootbox.userRemainingTries
                 });
                 
-                // Group Box card rendering
+                // Use the new GroupBoxCard component if available
+                if (window.GroupBoxCard) {
+                    return window.GroupBoxCard.render(lootbox);
+                }
+                
+                // Fallback to inline template
                 let chestImage = lootbox.lootboxData?.chestImage || 'chests/chest.png';
                 if (chestImage.includes('chests/OwnedChests/')) {
                     chestImage = chestImage.replace('chests/OwnedChests/', 'chests/');

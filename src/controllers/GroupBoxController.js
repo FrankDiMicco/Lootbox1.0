@@ -125,6 +125,11 @@ class GroupBoxController {
             this.participatedGroupBoxes.push(groupBox);
             await this.saveParticipatedGroupBoxes();
 
+            // Add join event for the creator
+            if (groupBoxSettings.creatorParticipates) {
+                this.addJoinEvent(currentUser.uid, lootboxData.name);
+            }
+
             return {
                 success: true,
                 groupBox: groupBox,
@@ -202,6 +207,9 @@ class GroupBoxController {
             this.participatedGroupBoxes.push(groupBox);
             await this.saveParticipatedGroupBoxes();
 
+            // Add join event to community history
+            this.addJoinEvent(currentUser.uid, groupBox.groupBoxName);
+
             return {
                 success: true,
                 groupBox: groupBox,
@@ -243,6 +251,11 @@ class GroupBoxController {
                     console.warn('Failed to remove participant from Firebase:', error);
                     // Continue with local removal even if Firebase fails
                 }
+            }
+
+            // Add leave event to community history
+            if (this.firebaseService && this.firebaseService.getCurrentUser()) {
+                this.addLeaveEvent(this.firebaseService.getCurrentUser().uid, groupBoxName);
             }
 
             // Remove from local collection

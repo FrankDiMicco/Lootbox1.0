@@ -173,6 +173,11 @@ class App {
         this.participatedGroupBoxes = this.groupBoxController.getAllGroupBoxes();
         this.communityHistory = this.groupBoxController.getCommunityHistory();
         
+        // Make community history globally accessible for GroupBoxCard
+        if (window.modernApp) {
+            window.modernApp.communityHistory = this.communityHistory;
+        }
+        
         console.log(`Loaded ${this.lootboxes.length} lootboxes and ${this.participatedGroupBoxes.length} group boxes`);
     }
 
@@ -272,6 +277,12 @@ class App {
         this.lootboxes = this.lootboxController.getAllLootboxes();
         this.participatedGroupBoxes = this.groupBoxController.getAllGroupBoxes();
         this.communityHistory = this.groupBoxController.getCommunityHistory();
+        
+        // Make community history globally accessible for GroupBoxCard
+        if (window.modernApp) {
+            window.modernApp.communityHistory = this.communityHistory;
+        }
+        
         this.render();
     }
 
@@ -281,6 +292,12 @@ class App {
     render() {
         if (!this.isInitialized) {
             return;
+        }
+
+        // Always update community history reference for GroupBoxCard
+        this.communityHistory = this.groupBoxController.getCommunityHistory();
+        if (window.modernApp) {
+            window.modernApp.communityHistory = this.communityHistory;
         }
 
         if (this.currentView === 'list') {

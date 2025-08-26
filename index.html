@@ -343,8 +343,14 @@
     <script type="module" src="src/models/GroupBox.js"></script>
 
     <!-- 3. Views (UI components) -->
-    <script type="module" src="src/views/components/LootboxCard.js"></script>
-    <script type="module" src="src/views/components/GroupBoxCard.js"></script>
+    <script type="module">
+        import LootboxCard from './src/views/components/LootboxCard.js';
+        import GroupBoxCard from './src/views/components/GroupBoxCard.js';
+        
+        // Make components globally available for backward compatibility
+        window.LootboxCard = LootboxCard;
+        window.GroupBoxCard = GroupBoxCard;
+    </script>
 
     <!-- 4. Controllers (business logic) -->
     <script type="module" src="src/controllers/LootboxController.js"></script>

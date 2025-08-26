@@ -89,15 +89,42 @@ class GroupBoxCard {
      * @returns {string} HTML string for the community stats section
      */
     static renderCommunityStats(groupBox) {
-        const uniqueUsers = groupBox.uniqueUsers || 0;
-        const totalOpens = groupBox.totalOpens || 0;
+        const stats = this.calculateCommunityStats(groupBox);
 
         return `
             <div class="group-box-community-stats">
-                <span>👥 ${uniqueUsers} users</span>
-                <span>🎯 ${totalOpens} total opens</span>
+                <span>👥 ${stats.uniqueUsers} users</span>
+                <span>🎯 ${stats.totalOpens} total opens</span>
             </div>
         `;
+    }
+
+    /**
+     * Calculate community statistics from session history
+     * @param {Object} groupBox - The group box data object
+     * @returns {Object} Calculated statistics
+     */
+    static calculateCommunityStats(groupBox) {
+        // Get community history from the app
+        const communityHistory = window.app?.communityHistory || window.modernApp?.communityHistory || 
+                                 window.modernApp?.groupBoxController?.communityHistory || 
+                                 window.modernApp?.groupBoxController?.getCommunityHistory?.() || [];
+        
+        // Count unique users who have spun/opened
+        const uniqueUserIds = new Set();
+        let totalOpens = 0;
+
+        for (const entry of communityHistory) {
+            if (entry.item && entry.userId) {
+                uniqueUserIds.add(entry.userId);
+                totalOpens++;
+            }
+        }
+
+        return {
+            uniqueUsers: uniqueUserIds.size,
+            totalOpens
+        };
     }
 
     /**
