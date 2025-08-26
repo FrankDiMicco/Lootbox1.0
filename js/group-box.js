@@ -365,14 +365,30 @@ const GroupBoxExtension = {
             let remainingTries = groupBoxData.settings.triesPerPerson;
             let totalOpens = 0;
             let isFirstTimeJoining = false;
+            let hasJoinedBefore = false;
             
             if (userTriesSnap.exists()) {
                 const userTriesData = userTriesSnap.data();
                 remainingTries = userTriesData.remainingTries;
                 totalOpens = userTriesData.totalOpens;
-            } else {
-                // This is the user's first time accessing this group box
+                hasJoinedBefore = userTriesData.hasJoined || false;
+            }
+            
+            // Check if this is truly the first time joining
+            // User hasn't joined before OR they left and are rejoining
+            if (!hasJoinedBefore) {
                 isFirstTimeJoining = true;
+                
+                // Create or update user_tries document to mark they've joined
+                // This prevents duplicate join messages even if they don't open the box
+                const { setDoc } = window.firebaseFunctions;
+                await setDoc(userTriesRef, {
+                    remainingTries: remainingTries,
+                    totalOpens: 0,
+                    hasJoined: true,
+                    firstJoined: new Date(),
+                    lastOpen: null
+                }, { merge: true });
             }
 
             // Create a temporary lootbox object from the group box data
@@ -515,15 +531,23 @@ const GroupBoxExtension = {
                 userTriesData.remainingTries--;
                 userTriesData.totalOpens++;
                 userTriesData.lastOpen = new Date();
+                // Preserve the hasJoined flag
+                if (!userTriesData.hasJoined) {
+                    userTriesData.hasJoined = true;
+                }
             } else {
+                // This shouldn't happen if loadAndOpenGroupBox creates the document first,
+                // but handle it just in case
                 userTriesData = {
                     remainingTries: app.currentLootbox.maxTries - 1,
                     totalOpens: 1,
-                    lastOpen: new Date()
+                    lastOpen: new Date(),
+                    hasJoined: true,
+                    firstJoined: new Date()
                 };
             }
             
-            await setDoc(userTriesRef, userTriesData);
+            await setDoc(userTriesRef, userTriesData, { merge: true });
             
             // Update group box statistics
             const groupBoxRef = doc(window.firebaseDb, 'group_boxes', groupBoxId);
@@ -836,7 +860,7 @@ async confirmDeleteGroupBox() {
         if (app.isFirebaseReady && window.firebaseDb && window.firebaseFunctions) {
             const currentUser = window.firebaseAuth.currentUser;
             if (currentUser) {
-                const { collection, addDoc, doc, deleteDoc } = window.firebaseFunctions;
+                const { collection, addDoc, doc, deleteDoc, updateDoc } = window.firebaseFunctions;
                 const userId = currentUser.uid;
                 const userName = userId === 'anonymous' ? 'Anonymous User' : `User ${userId.substring(0, 8)}`;
                 
@@ -851,6 +875,12 @@ async confirmDeleteGroupBox() {
                 };
                 
                 await addDoc(collection(window.firebaseDb, 'group_boxes', groupBoxId, 'opens'), leaveData);
+                
+                // Reset the hasJoined flag in user_tries so they can rejoin later
+                const userTriesRef = doc(window.firebaseDb, 'group_boxes', groupBoxId, 'user_tries', userId);
+                await updateDoc(userTriesRef, {
+                    hasJoined: false
+                });
                 
                 // Delete from user's participated list
                 const participatedRef = doc(window.firebaseDb, 'users', currentUser.uid, 'participated_group_boxes', groupBoxId);
