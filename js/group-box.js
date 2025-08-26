@@ -452,6 +452,7 @@ const GroupBoxExtension = {
             }
             
             // Skip list view and go directly to lootbox view
+            app.view = 'lootbox';
             document.getElementById('listView').classList.add('hidden');
             document.getElementById('lootboxView').classList.remove('hidden');
             

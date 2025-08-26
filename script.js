@@ -12,6 +12,7 @@ constructor() {
     this.currentFilter = 'all';
     this.isFirebaseReady = false;
     this.isOrganizerReadonly = false;
+    this.view = 'list'; // Track current view
     
     // Wait for extensions to load, then initialize
     this.waitForExtensionsAndInitialize();
@@ -29,9 +30,13 @@ async showListView() {
     const byId = new Map(local.map(x => [x.groupBoxId, x]));
     for (const x of remote) byId.set(x.groupBoxId, { ...(byId.get(x.groupBoxId)||{}), ...x });
     this.participatedGroupBoxes = [...byId.values()];
+    
+    // After the merge, persist so cold starts show it instantly
+    localStorage.setItem('participatedGroupBoxes', JSON.stringify(this.participatedGroupBoxes));
   }
 
   this.currentLootbox = null;
+  this.view = 'list';
   document.getElementById('lootboxView').classList.add('hidden');
   document.getElementById('listView').classList.remove('hidden');
   this.renderLootboxes();
@@ -343,6 +348,7 @@ attachEventListeners() {
             this.popupTimeout = null;
         }
         
+        this.view = 'lootbox';
         document.getElementById('listView').classList.add('hidden');
         document.getElementById('lootboxView').classList.remove('hidden');
         
@@ -1269,7 +1275,11 @@ window.app = new LootboxApp();
 const app = window.app;
 
 // Hook browser/OS back so it behaves like your in-app arrow
-window.addEventListener('popstate', () => app.showListView());
+window.addEventListener('popstate', () => {
+    if (app.view !== 'list') {
+        app.showListView();
+    }
+});
 
 // Handle shared lootboxes and group boxes
 const urlParams = new URLSearchParams(window.location.search);
