@@ -145,9 +145,9 @@ const UIRenderer = {
                             <span>Your Opens: ${lootbox.userTotalOpens || 0}</span>
                             <span>${lootbox.isOrganizerOnly ? 'Status: Creator' : `Tries Left: ${lootbox.userRemainingTries !== undefined ? lootbox.userRemainingTries : lootbox.settings?.triesPerPerson || 0}`}</span>
                         </div>
-                        <div class="group-box-community-stats">
-                            <span>👥 ${lootbox.uniqueUsers || 0} users</span>
-                            <span>🎯 ${lootbox.totalOpens || 0} total opens</span>
+                        <div class="group-box-community-stats" id="stats-${lootbox.groupBoxId}">
+                            <span>👥 ${lootbox.participantCount || lootbox.uniqueUsers || 0} users</span>
+                            <span>🎯 ${lootbox.statsTotalOpens || lootbox.totalOpens || 0} total opens</span>
                         </div>
                         <div class="lootbox-actions">
                             ${lootbox.isOrganizerOnly ? `<button class="action-btn" onclick="event.stopPropagation(); app.editGroupBox('${lootbox.groupBoxId}')">
@@ -205,6 +205,27 @@ const UIRenderer = {
                 `;
             }
         }).join('');
+
+        // After rendering, load stats for all group boxes
+        this.loadAllGroupBoxStats();
+    },
+
+    async loadAllGroupBoxStats() {
+        if (!window.app || !window.app.participatedGroupBoxes) return;
+        
+        // Load stats for each group box and update the display
+        for (const groupBox of window.app.participatedGroupBoxes) {
+            const stats = await window.app.loadGroupBoxStats(groupBox.groupBoxId);
+            if (stats) {
+                const statsElement = document.getElementById(`stats-${groupBox.groupBoxId}`);
+                if (statsElement) {
+                    statsElement.innerHTML = `
+                        <span>👥 ${stats.participantCount} users</span>
+                        <span>🎯 ${stats.totalOpens} total opens</span>
+                    `;
+                }
+            }
+        }
     },
 
     renderLootboxView() {

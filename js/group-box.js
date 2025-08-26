@@ -207,10 +207,23 @@ const GroupBoxExtension = {
                 return;
             }
 
-            const { collection, addDoc } = window.firebaseFunctions;
+            const { collection, addDoc, doc, runTransaction, increment } = window.firebaseFunctions;
             const userName = userId === 'anonymous' ? 'Anonymous User' : `User ${userId.substring(0, 8)}`;
             
-            // Create join event data
+            // Use transaction to update stats and participants atomically
+            await runTransaction(window.firebaseDb, async (tx) => {
+                // Create references
+                const statsRef = doc(window.firebaseDb, 'groupBoxes', groupBoxId, 'meta', 'stats');
+                const participantRef = doc(window.firebaseDb, 'groupBoxes', groupBoxId, 'participants', userId);
+                
+                // Update participant record
+                tx.set(participantRef, { joined: true }, { merge: true });
+                
+                // Increment participant count in stats
+                tx.set(statsRef, { participantCount: increment(1) }, { merge: true });
+            });
+            
+            // Create join event data for history
             const joinData = {
                 userId: userId,
                 userName: userName,
@@ -483,7 +496,7 @@ const GroupBoxExtension = {
                 return;
             }
 
-            const { collection, addDoc, doc, getDoc, setDoc, updateDoc } = window.firebaseFunctions;
+            const { collection, addDoc, doc, getDoc, setDoc, updateDoc, runTransaction, increment } = window.firebaseFunctions;
             const groupBoxId = app.currentLootbox.groupBoxId;
             const userId = window.firebaseAuth.currentUser?.uid || 'anonymous';
             
@@ -492,6 +505,19 @@ const GroupBoxExtension = {
             
             // Create session ID for this opening session
             const sessionId = Date.now().toString();
+            
+            // Use transaction to update stats and user opens atomically
+            await runTransaction(window.firebaseDb, async (tx) => {
+                // Create references
+                const statsRef = doc(window.firebaseDb, 'groupBoxes', groupBoxId, 'meta', 'stats');
+                const participantRef = doc(window.firebaseDb, 'groupBoxes', groupBoxId, 'participants', userId);
+                
+                // Increment total opens in stats
+                tx.set(statsRef, { totalOpens: increment(1) }, { merge: true });
+                
+                // Increment user's opens count
+                tx.set(participantRef, { opens: increment(1) }, { merge: true });
+            });
             
             // Save the spin result to group_boxes/{groupBoxId}/opens/{openId}
             const openData = {
@@ -524,7 +550,7 @@ const GroupBoxExtension = {
             
             await setDoc(userTriesRef, userTriesData);
             
-            // Update group box statistics
+            // Update group box statistics (legacy fields for backward compatibility)
             const groupBoxRef = doc(window.firebaseDb, 'group_boxes', groupBoxId);
             const groupBoxSnap = await getDoc(groupBoxRef);
             
@@ -835,11 +861,24 @@ async confirmDeleteGroupBox() {
         if (app.isFirebaseReady && window.firebaseDb && window.firebaseFunctions) {
             const currentUser = window.firebaseAuth.currentUser;
             if (currentUser) {
-                const { collection, addDoc, doc, deleteDoc } = window.firebaseFunctions;
+                const { collection, addDoc, doc, deleteDoc, runTransaction, increment } = window.firebaseFunctions;
                 const userId = currentUser.uid;
                 const userName = userId === 'anonymous' ? 'Anonymous User' : `User ${userId.substring(0, 8)}`;
                 
-                // Record leave event
+                // Use transaction to update stats and participants atomically
+                await runTransaction(window.firebaseDb, async (tx) => {
+                    // Create references
+                    const statsRef = doc(window.firebaseDb, 'groupBoxes', groupBoxId, 'meta', 'stats');
+                    const participantRef = doc(window.firebaseDb, 'groupBoxes', groupBoxId, 'participants', userId);
+                    
+                    // Update participant record to mark as left
+                    tx.set(participantRef, { joined: false }, { merge: true });
+                    
+                    // Decrement participant count in stats
+                    tx.set(statsRef, { participantCount: increment(-1) }, { merge: true });
+                });
+                
+                // Record leave event for history
                 const leaveData = {
                     userId: userId,
                     userName: userName,
@@ -874,6 +913,39 @@ async confirmDeleteGroupBox() {
     
     app.pendingDeleteGroupBoxId = undefined;
 },
+
+    async loadGroupBoxStats(groupBoxId) {
+        try {
+            if (!app.isFirebaseReady || !window.firebaseDb || !window.firebaseFunctions) {
+                console.log('Firebase not available for loading stats');
+                return null;
+            }
+
+            const { doc, getDoc } = window.firebaseFunctions;
+            
+            // Get the stats document
+            const statsRef = doc(window.firebaseDb, 'groupBoxes', groupBoxId, 'meta', 'stats');
+            const statsSnap = await getDoc(statsRef);
+            
+            if (statsSnap.exists()) {
+                const stats = statsSnap.data();
+                console.log(`Loaded stats for Group Box ${groupBoxId}:`, stats);
+                return {
+                    participantCount: stats.participantCount || 0,
+                    totalOpens: stats.totalOpens || 0
+                };
+            } else {
+                console.log(`No stats document found for Group Box ${groupBoxId}`);
+                return {
+                    participantCount: 0,
+                    totalOpens: 0
+                };
+            }
+        } catch (error) {
+            console.error('Error loading group box stats:', error);
+            return null;
+        }
+    },
 
     async loadCommunityHistory(groupBoxId) {
         try {
