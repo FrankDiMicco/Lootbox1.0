@@ -57,14 +57,14 @@ async waitForExtensionsAndInitialize() {
 }
 
     
-    renderLootboxes() {
+    async renderLootboxes() {
         if (window.UIRenderer && typeof window.UIRenderer.renderLootboxes === 'function') {
-            window.UIRenderer.renderLootboxes();
+            await window.UIRenderer.renderLootboxes();
         } else {
             // Wait for UI module to be ready
-            const onReady = () => {
+            const onReady = async () => {
                 if (window.UIRenderer && typeof window.UIRenderer.renderLootboxes === 'function') {
-                    window.UIRenderer.renderLootboxes();
+                    await window.UIRenderer.renderLootboxes();
                 }
                 document.removeEventListener('ui:ready', onReady);
             };
@@ -72,7 +72,7 @@ async waitForExtensionsAndInitialize() {
         }
     }
 async initializeApp() {
-        this.renderLootboxes();
+        await this.renderLootboxes();
         this.attachEventListeners();
         
         // Wait for Firebase auth to be ready, then load lootboxes

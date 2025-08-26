@@ -450,7 +450,7 @@ const GroupBoxExtension = {
                 await app.recordJoinEvent(groupBoxId, userId);
             }
             
-            // Load community history for this Group Box
+            // Load community history for this Group Box (this will also update stats)
             await app.loadCommunityHistory(groupBoxId);
 
             // Set this as the current lootbox and open directly
@@ -570,6 +570,9 @@ const GroupBoxExtension = {
             // Update local remaining tries
             app.currentLootbox.remainingTries = userTriesData.remainingTries;
             
+            // Reload community history to refresh stats after this open
+            await app.loadCommunityHistory(groupBoxId);
+            
             console.log('Successfully saved Group Box spin:', result);
             
         } catch (error) {
@@ -687,6 +690,151 @@ const GroupBoxExtension = {
                    'Remaining:', app.currentLootbox.remainingTries);
     }
 },
+
+    calculateActiveUsers() {
+        if (!app.communityHistory || app.communityHistory.length === 0) {
+            return 0;
+        }
+        
+        // Track user join/leave status
+        const userStatus = new Map(); // userId -> { joined: boolean, lastAction: timestamp }
+        
+        // Sort history by timestamp (oldest first) to process events in order
+        const sortedHistory = [...app.communityHistory].sort((a, b) => 
+            new Date(a.timestamp) - new Date(b.timestamp)
+        );
+        
+        // Process each event to track user status
+        sortedHistory.forEach(entry => {
+            if (entry.action === 'join') {
+                userStatus.set(entry.userId, { 
+                    joined: true, 
+                    lastAction: entry.timestamp 
+                });
+            } else if (entry.action === 'leave') {
+                userStatus.set(entry.userId, { 
+                    joined: false, 
+                    lastAction: entry.timestamp 
+                });
+            }
+        });
+        
+        // Count currently active users (those who have joined but not left)
+        let activeUsers = 0;
+        for (const [userId, status] of userStatus.entries()) {
+            if (status.joined) {
+                activeUsers++;
+            }
+        }
+        
+        return activeUsers;
+    },
+
+    calculateTotalOpens() {
+        if (!app.communityHistory || app.communityHistory.length === 0) {
+            return 0;
+        }
+        
+        // Count all entries that are actual opens (not join/leave events)
+        let totalOpens = 0;
+        app.communityHistory.forEach(entry => {
+            // If it has an item and no action (or action is not join/leave), it's an open
+            if (entry.item && (!entry.action || (entry.action !== 'join' && entry.action !== 'leave'))) {
+                totalOpens++;
+            }
+        });
+        
+        return totalOpens;
+    },
+
+    updateGroupBoxStats(groupBoxData) {
+        // Calculate real-time stats from community history
+        const activeUsers = app.calculateActiveUsers();
+        const totalOpens = app.calculateTotalOpens();
+        
+        // Update the group box data with calculated stats
+        if (groupBoxData) {
+            groupBoxData.uniqueUsers = activeUsers;
+            groupBoxData.totalOpens = totalOpens;
+        }
+        
+        return {
+            uniqueUsers: activeUsers,
+            totalOpens: totalOpens
+        };
+    },
+
+    async loadGroupBoxStats(groupBoxId) {
+        try {
+            if (!app.isFirebaseReady || !window.firebaseDb || !window.firebaseFunctions) {
+                return { uniqueUsers: 0, totalOpens: 0 };
+            }
+
+            const { collection, getDocs, orderBy, query, limit } = window.firebaseFunctions;
+            
+            // Query the opens collection for this group box
+            const opensRef = collection(window.firebaseDb, 'group_boxes', groupBoxId, 'opens');
+            const q = query(opensRef, orderBy('timestamp', 'desc'), limit(50));
+            
+            const querySnapshot = await getDocs(q);
+            const history = [];
+            
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                history.push({
+                    userId: data.userId,
+                    userName: data.userName,
+                    item: data.item,
+                    action: data.action,
+                    timestamp: data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp)
+                });
+            });
+            
+            // Calculate stats from this specific history
+            return app.calculateStatsFromHistory(history);
+            
+        } catch (error) {
+            console.error('Error loading group box stats:', error);
+            return { uniqueUsers: 0, totalOpens: 0 };
+        }
+    },
+
+    calculateStatsFromHistory(history) {
+        if (!history || history.length === 0) {
+            return { uniqueUsers: 0, totalOpens: 0 };
+        }
+        
+        // Calculate active users
+        const userStatus = new Map();
+        const sortedHistory = [...history].sort((a, b) => 
+            new Date(a.timestamp) - new Date(b.timestamp)
+        );
+        
+        sortedHistory.forEach(entry => {
+            if (entry.action === 'join') {
+                userStatus.set(entry.userId, { joined: true });
+            } else if (entry.action === 'leave') {
+                userStatus.set(entry.userId, { joined: false });
+            }
+        });
+        
+        let activeUsers = 0;
+        for (const [userId, status] of userStatus.entries()) {
+            if (status.joined) {
+                activeUsers++;
+            }
+        }
+        
+        // Calculate total opens
+        let totalOpens = 0;
+        history.forEach(entry => {
+            if (entry.item && (!entry.action || (entry.action !== 'join' && entry.action !== 'leave'))) {
+                totalOpens++;
+            }
+        });
+        
+        return { uniqueUsers: activeUsers, totalOpens: totalOpens };
+    },
 
     async favoriteGroupBox(groupBoxId) {
         // Find the group box in the participated array
@@ -938,6 +1086,30 @@ async confirmDeleteGroupBox() {
             
             app.communityHistory = communityHistory;
             console.log(`Loaded ${communityHistory.length} community pulls for Group Box ${groupBoxId}`);
+            
+            // Update stats in the current lootbox and participated group boxes array
+            const stats = app.updateGroupBoxStats();
+            
+            // Update the current lootbox stats if it's the same group box
+            if (app.currentLootbox && app.currentLootbox.groupBoxId === groupBoxId) {
+                app.currentLootbox.uniqueUsers = stats.uniqueUsers;
+                app.currentLootbox.totalOpens = stats.totalOpens;
+            }
+            
+            // Also update in the participated group boxes array for list display
+            const groupBoxIndex = app.participatedGroupBoxes.findIndex(gb => gb.groupBoxId === groupBoxId);
+            if (groupBoxIndex >= 0) {
+                app.participatedGroupBoxes[groupBoxIndex].uniqueUsers = stats.uniqueUsers;
+                app.participatedGroupBoxes[groupBoxIndex].totalOpens = stats.totalOpens;
+                
+                // Update localStorage to persist the calculated stats
+                localStorage.setItem('participatedGroupBoxes', JSON.stringify(app.participatedGroupBoxes));
+                
+                // Refresh the list view if we're currently viewing it to show updated stats
+                if (app.view === 'list') {
+                    app.renderLootboxes();
+                }
+            }
             
         } catch (error) {
             console.error('Error loading community history:', error);

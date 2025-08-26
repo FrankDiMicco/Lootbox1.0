@@ -1,9 +1,14 @@
 const UIRenderer = {
-    renderLootboxes() {
+    async renderLootboxes() {
         const app = window.app || { currentFilter: 'all', lootboxes: [], participatedGroupBoxes: [] };
         if (!window.app) { console.warn('UIRenderer: window.app not set yet; using empty state'); }
         const grid = document.getElementById('lootboxGrid');
         const emptyState = document.getElementById('emptyState');
+        
+        // Load stats for group boxes before filtering and rendering
+        if (window.app.participatedGroupBoxes && window.app.participatedGroupBoxes.length > 0) {
+            await UIRenderer.loadGroupBoxStats();
+        }
         
         // Filter lootboxes based on current filter
         let filteredLootboxes = [];
@@ -315,9 +320,19 @@ const UIRenderer = {
         
         // Update stats section
         const statsTitle = isGroupBox ? 'Community Pulls' : 'Session Pulls';
-        sessionStats.innerHTML = `
-            <div class="stat-item">${statsTitle}: <span id="totalPulls">${historyData.length}</span></div>
-        `;
+        let statsHTML = `<div class="stat-item">${statsTitle}: <span id="totalPulls">${historyData.length}</span></div>`;
+        
+        // Add group box specific stats
+        if (isGroupBox && window.app.calculateActiveUsers && window.app.calculateTotalOpens) {
+            const activeUsers = window.app.calculateActiveUsers();
+            const totalOpens = window.app.calculateTotalOpens();
+            statsHTML += `
+                <div class="stat-item">Active Users: <span>${activeUsers}</span></div>
+                <div class="stat-item">Total Opens: <span>${totalOpens}</span></div>
+            `;
+        }
+        
+        sessionStats.innerHTML = statsHTML;
         
         // Add item counts
         Object.entries(itemCounts)
@@ -474,6 +489,33 @@ const UIRenderer = {
         // Hide all error messages
         const errorMessages = document.querySelectorAll('.error-message');
         errorMessages.forEach(error => error.classList.add('hidden'));
+    },
+
+    async loadGroupBoxStats() {
+        // Load stats for all group boxes in parallel
+        const statsPromises = window.app.participatedGroupBoxes.map(async (groupBox, index) => {
+            if (groupBox.groupBoxId && window.app.loadGroupBoxStats) {
+                try {
+                    const stats = await window.app.loadGroupBoxStats(groupBox.groupBoxId);
+                    // Update the group box with real stats
+                    window.app.participatedGroupBoxes[index].uniqueUsers = stats.uniqueUsers;
+                    window.app.participatedGroupBoxes[index].totalOpens = stats.totalOpens;
+                    return stats;
+                } catch (error) {
+                    console.error(`Error loading stats for group box ${groupBox.groupBoxId}:`, error);
+                    return { uniqueUsers: 0, totalOpens: 0 };
+                }
+            }
+            return { uniqueUsers: 0, totalOpens: 0 };
+        });
+
+        // Wait for all stats to load
+        await Promise.all(statsPromises);
+        
+        // Update localStorage with the updated stats
+        if (window.app.participatedGroupBoxes.length > 0) {
+            localStorage.setItem('participatedGroupBoxes', JSON.stringify(window.app.participatedGroupBoxes));
+        }
     }
 };
 
