@@ -71,16 +71,25 @@ class GroupBoxCard {
      */
     static renderStats(groupBox) {
         const userOpens = groupBox.userTotalOpens || 0;
-        const triesLeft = groupBox.isOrganizerOnly 
-            ? 'Status: Creator' 
-            : `Tries Left: ${groupBox.userRemainingTries !== undefined ? groupBox.userRemainingTries : groupBox.settings?.triesPerPerson || 0}`;
-
-        return `
-            <div class="lootbox-stats">
-                <span>Your Opens: ${userOpens}</span>
-                <span>${triesLeft}</span>
-            </div>
-        `;
+        
+        if (groupBox.isOrganizerOnly) {
+            // For organizer-only mode, only show creator status
+            return `
+                <div class="lootbox-stats">
+                    <span>Status: Creator</span>
+                    <span>Organizer Mode</span>
+                </div>
+            `;
+        } else {
+            // For regular participants, show opens and tries
+            const triesLeft = `Tries Left: ${groupBox.userRemainingTries !== undefined ? groupBox.userRemainingTries : groupBox.settings?.triesPerPerson || 0}`;
+            return `
+                <div class="lootbox-stats">
+                    <span>Your Opens: ${userOpens}</span>
+                    <span>${triesLeft}</span>
+                </div>
+            `;
+        }
     }
 
     /**

@@ -155,8 +155,10 @@ const UIRenderer = {
                     <div class="lootbox-info">
                         <h3>${lootbox.groupBoxName || lootbox.lootboxData?.name}</h3>
                         <div class="lootbox-stats">
-                            <span>Your Opens: ${lootbox.userTotalOpens || 0}</span>
-                            <span>${lootbox.isOrganizerOnly ? 'Status: Creator' : `Tries Left: ${lootbox.userRemainingTries !== undefined ? lootbox.userRemainingTries : lootbox.settings?.triesPerPerson || 0}`}</span>
+                            ${lootbox.isOrganizerOnly ? 
+                                '<span>Status: Creator</span><span>Organizer Mode</span>' : 
+                                `<span>Your Opens: ${lootbox.userTotalOpens || 0}</span><span>Tries Left: ${lootbox.userRemainingTries !== undefined ? lootbox.userRemainingTries : lootbox.settings?.triesPerPerson || 0}</span>`
+                            }
                         </div>
                         <div class="group-box-community-stats">
                             <span>👥 ${lootbox.uniqueUsers || 0} users</span>
