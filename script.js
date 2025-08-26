@@ -17,8 +17,6 @@ constructor() {
     this.waitForExtensionsAndInitialize();
 }
 
-
-
 async waitForExtensionsAndInitialize() {
     // Wait for extensions to be available
     while (!window.UIRenderer || !window.GroupBoxExtension) {
