@@ -1035,10 +1035,17 @@ attachEventListeners() {
                     const groupBoxSnap = await getDoc(groupBoxRef);
                     
                     if (groupBoxSnap.exists()) {
+                        // Load stats for this group box
+                        const statsRef = doc(window.firebaseDb, 'groupBoxes', data.groupBoxId, 'meta', 'stats');
+                        const statsSnap = await getDoc(statsRef);
+                        const stats = statsSnap.data() || {};
+                        
                         // Only add if the group box still exists
                         participatedBoxes.push({ 
                             id: docSnap.id, 
                             ...data,
+                            participantCount: stats.participantCount || 0,
+                            statsTotalOpens: stats.totalOpens || 0,
                             isGroupBox: true
                         });
                     } else {
@@ -1063,11 +1070,17 @@ attachEventListeners() {
                     const organizerSnapshot = await getDocs(organizerQuery);
                     const organizerBoxes = [];
                     
-                    organizerSnapshot.forEach((doc) => {
-                        const data = doc.data();
+                    for (const docSnap of organizerSnapshot.docs) {
+                        const data = docSnap.data();
+                        
+                        // Load stats for this group box
+                        const statsRef = doc(window.firebaseDb, 'groupBoxes', docSnap.id, 'meta', 'stats');
+                        const statsSnap = await getDoc(statsRef);
+                        const stats = statsSnap.data() || {};
+                        
                         organizerBoxes.push({
-                            id: doc.id,
-                            groupBoxId: doc.id,
+                            id: docSnap.id,
+                            groupBoxId: docSnap.id,
                             groupBoxName: data.lootboxData?.name || data.name,
                             lootboxData: data.lootboxData,
                             settings: data.settings,
@@ -1075,6 +1088,8 @@ attachEventListeners() {
                             creatorName: data.creatorName,
                             totalOpens: data.totalOpens || 0,
                             uniqueUsers: data.uniqueUsers || 0,
+                            participantCount: stats.participantCount || 0,
+                            statsTotalOpens: stats.totalOpens || 0,
                             firstParticipated: data.createdAt,
                             lastParticipated: data.createdAt,
                             userTotalOpens: 0, // Organizer hasn't opened any
@@ -1084,7 +1099,7 @@ attachEventListeners() {
                             favorite: false,
                             isGroupBox: true
                         });
-                    });
+                    }
                     
                     console.log(`Loaded ${organizerBoxes.length} organizer-only group boxes`);
                     
