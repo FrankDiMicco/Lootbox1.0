@@ -243,7 +243,13 @@
 
                 <div class="form-group">
                     <label class="form-label">Tries per person</label>
-                    <input type="number" id="triesPerPerson" class="form-input" value="3" min="1" max="10">
+                    <div class="tries-inline-container">
+                        <input type="number" id="triesPerPerson" class="form-input tries-input-small" value="3" min="1" max="100">
+                        <div class="checkbox-group inline-checkbox">
+                            <input type="checkbox" id="unlimitedGroupTries" class="form-checkbox">
+                            <label for="unlimitedGroupTries" class="checkbox-label">Unlimited tries</label>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">

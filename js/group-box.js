@@ -15,6 +15,9 @@ const GroupBoxExtension = {
         
         // Reset form to defaults
         document.getElementById('triesPerPerson').value = 3;
+        document.getElementById('unlimitedGroupTries').checked = false;
+        document.getElementById('triesPerPerson').disabled = false;
+        document.getElementById('triesPerPerson').style.opacity = '1';
         document.getElementById('expiresIn').value = '24';
         document.getElementById('creatorParticipates').checked = true;
         document.getElementById('hideContents').checked = true;
@@ -81,7 +84,7 @@ const GroupBoxExtension = {
                     chestImage: lootbox.chestImage || 'chests/chest.png'
                 },
                 settings: {
-                    triesPerPerson: Number(document.getElementById('triesPerPerson').value) || 1,
+                    triesPerPerson: document.getElementById('unlimitedGroupTries').checked ? "unlimited" : (Number(document.getElementById('triesPerPerson').value) || 1),
                     expiresAt: expiresAt,
                     creatorParticipates: creatorParticipates,
                     hideContents: Boolean(document.getElementById('hideContents').checked),
@@ -129,7 +132,7 @@ const GroupBoxExtension = {
                 firstParticipated: new Date(),
                 lastParticipated: new Date(),
                 userTotalOpens: 0,
-                userRemainingTries: creatorParticipates ? groupBoxData.settings.triesPerPerson : 0,
+                userRemainingTries: creatorParticipates ? (groupBoxData.settings.triesPerPerson === "unlimited" ? "unlimited" : groupBoxData.settings.triesPerPerson) : 0,
                 isCreator: true, // Mark as creator
                 isOrganizerOnly: !creatorParticipates, // Mark if organizer-only
                 favorite: false,
@@ -362,7 +365,7 @@ const GroupBoxExtension = {
             const userTriesRef = doc(window.firebaseDb, 'group_boxes', groupBoxId, 'user_tries', userId);
             const userTriesSnap = await getDoc(userTriesRef);
             
-            let remainingTries = groupBoxData.settings.triesPerPerson;
+            let remainingTries = groupBoxData.settings.triesPerPerson === "unlimited" ? "unlimited" : groupBoxData.settings.triesPerPerson;
             let totalOpens = 0;
             let isFirstTimeJoining = false;
             let hasJoinedBefore = false;
@@ -528,7 +531,10 @@ const GroupBoxExtension = {
             let userTriesData;
             if (userTriesSnap.exists()) {
                 userTriesData = userTriesSnap.data();
-                userTriesData.remainingTries--;
+                // Only decrement if not unlimited
+                if (userTriesData.remainingTries !== "unlimited") {
+                    userTriesData.remainingTries--;
+                }
                 userTriesData.totalOpens++;
                 userTriesData.lastOpen = new Date();
                 // Preserve the hasJoined flag
@@ -539,7 +545,7 @@ const GroupBoxExtension = {
                 // This shouldn't happen if loadAndOpenGroupBox creates the document first,
                 // but handle it just in case
                 userTriesData = {
-                    remainingTries: app.currentLootbox.maxTries - 1,
+                    remainingTries: app.currentLootbox.maxTries === "unlimited" ? "unlimited" : app.currentLootbox.maxTries - 1,
                     totalOpens: 1,
                     lastOpen: new Date(),
                     hasJoined: true,

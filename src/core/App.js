@@ -143,6 +143,22 @@ class App {
             });
         }
 
+        // Group box unlimited tries checkbox
+        const unlimitedGroupTriesCheckbox = document.getElementById('unlimitedGroupTries');
+        if (unlimitedGroupTriesCheckbox) {
+            unlimitedGroupTriesCheckbox.addEventListener('change', (e) => {
+                const triesPerPersonInput = document.getElementById('triesPerPerson');
+                if (triesPerPersonInput) {
+                    triesPerPersonInput.disabled = e.target.checked;
+                    if (e.target.checked) {
+                        triesPerPersonInput.style.opacity = '0.5';
+                    } else {
+                        triesPerPersonInput.style.opacity = '1';
+                    }
+                }
+            });
+        }
+
         // Modal close on backdrop click
         const editModal = document.getElementById('editModal');
         if (editModal) {

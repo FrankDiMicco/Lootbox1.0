@@ -450,6 +450,34 @@ body {
     margin-bottom: 15px;
 }
 
+/* Inline layout for tries per person */
+.tries-inline-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.tries-input-small {
+    width: 80px;
+    flex-shrink: 0;
+}
+
+.inline-checkbox {
+    margin-bottom: 0;
+    flex: 1;
+}
+
+/* Hide number input spinner arrows */
+.tries-input-small::-webkit-outer-spin-button,
+.tries-input-small::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.tries-input-small[type=number] {
+    -moz-appearance: textfield;
+}
+
 .checkbox-group input[type="checkbox"] {
     width: 20px;
     height: 20px;
