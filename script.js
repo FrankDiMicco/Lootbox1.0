@@ -21,33 +21,38 @@ async showListView() {
     if (this.currentLootbox && this.currentLootbox.isGroupBox) {
         await this.syncParticipatedGroupBoxData();
         
-        // Always reload from Firebase when returning from a group box
-        // This ensures we get any newly joined group boxes
+        // Merge local and Firebase data to handle race conditions
+        const local = JSON.parse(localStorage.getItem('participatedGroupBoxes') || '[]');
+        let fetched = [];
         try {
-            this.participatedGroupBoxes = await this.loadParticipatedGroupBoxes();
-            console.log('Reloaded participated group boxes from Firebase');
+            fetched = await this.loadParticipatedGroupBoxes();
         } catch (error) {
-            console.error('Error reloading participated group boxes:', error);
-            // Fall back to localStorage if Firebase fails
-            const saved = localStorage.getItem('participatedGroupBoxes');
-            if (saved) {
-                this.participatedGroupBoxes = JSON.parse(saved);
-            }
+            console.error('Error loading from Firebase:', error);
         }
+        
+        // Create a map for merging, keyed by groupBoxId
+        const byId = new Map(local.map(x => [x.groupBoxId, x]));
+        
+        // Merge fetched data, preferring newer data from Firebase
+        for (const x of fetched) {
+            byId.set(x.groupBoxId, { ...byId.get(x.groupBoxId), ...x });
+        }
+        
+        this.participatedGroupBoxes = [...byId.values()];
+        console.log('Merged participated group boxes:', this.participatedGroupBoxes.length);
     }
     
     // Clear the current lootbox AFTER syncing
     this.currentLootbox = null;
     
+    // Rest of the function remains the same...
     document.getElementById('lootboxView').classList.add('hidden');
     document.getElementById('listView').classList.remove('hidden');
     
-    // Clear session and community history when leaving lootbox view
     this.sessionHistory = [];
     this.communityHistory = [];
     this.updateSessionDisplay();
     
-    // Reset cooldown and hide popup when leaving lootbox view
     this.isOnCooldown = false;
     if (this.popupTimeout) {
         clearTimeout(this.popupTimeout);
@@ -58,13 +63,10 @@ async showListView() {
         popup.classList.remove('show');
     }
     
-    // Reset organizer readonly flag
     this.isOrganizerReadonly = false;
     
-    // Refresh the lootbox list to ensure group boxes are visible
     this.renderLootboxes();
 }
-
 
 async waitForExtensionsAndInitialize() {
     // Wait for extensions to be available
