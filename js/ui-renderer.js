@@ -309,21 +309,25 @@ const UIRenderer = {
         const isGroupBox = window.app.currentLootbox && window.app.currentLootbox.isGroupBox;
         const historyData = isGroupBox ? window.app.communityHistory : window.app.sessionHistory;
         
-        // Update total pulls
-        totalPulls.textContent = historyData.length;
-        
-        // Generate item counts for stats (excluding null items)
+        // Count only actual pulls/spins (not join/leave events)
+        let actualPulls = 0;
         const itemCounts = {};
+        
         historyData.forEach(entry => {
+            // Only count entries with valid items (not join/leave events)
             if (entry.item && entry.item !== null && entry.item !== 'null') {
+                actualPulls++;
                 itemCounts[entry.item] = (itemCounts[entry.item] || 0) + 1;
             }
         });
         
+        // Update total pulls with actual pulls count
+        totalPulls.textContent = actualPulls;
+        
         // Update stats section
         const statsTitle = isGroupBox ? 'Community Pulls' : 'Session Pulls';
         sessionStats.innerHTML = `
-            <div class="stat-item">${statsTitle}: <span id="totalPulls">${historyData.length}</span></div>
+            <div class="stat-item">${statsTitle}: <span id="totalPulls">${actualPulls}</span></div>
         `;
         
         // Add item counts
