@@ -1089,6 +1089,11 @@ async confirmDeleteGroupBox() {
 
             const { collection, getDocs } = window.firebaseFunctions;
             
+            // Get the current group box to check if it's organizer-only
+            const groupBox = app.participatedGroupBoxes.find(gb => gb.groupBoxId === groupBoxId);
+            const currentUserId = window.firebaseAuth?.currentUser?.uid;
+            const isOrganizerOnly = groupBox && groupBox.isOrganizerOnly;
+            
             // Get all user tries for this group box
             const userTriesRef = collection(window.firebaseDb, 'group_boxes', groupBoxId, 'user_tries');
             const userTriesSnapshot = await getDocs(userTriesRef);
@@ -1096,9 +1101,17 @@ async confirmDeleteGroupBox() {
             const participants = [];
             userTriesSnapshot.forEach((doc) => {
                 const data = doc.data();
+                const userId = doc.id;
+                
+                // Skip the organizer if this is an organizer-only group box
+                if (isOrganizerOnly && userId === currentUserId) {
+                    console.log('Skipping organizer from participants list (organizer-only mode)');
+                    return;
+                }
+                
                 participants.push({
-                    userId: doc.id,
-                    userName: doc.id === 'anonymous' ? 'Anonymous User' : `User ${doc.id.substring(0, 8)}`,
+                    userId: userId,
+                    userName: userId === 'anonymous' ? 'Anonymous User' : `User ${userId.substring(0, 8)}`,
                     totalOpens: data.totalOpens || 0,
                     remainingTries: data.remainingTries || 0,
                     lastOpen: data.lastOpen
