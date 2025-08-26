@@ -16,6 +16,49 @@ constructor() {
     // Wait for extensions to load, then initialize
     this.waitForExtensionsAndInitialize();
 }
+async showListView() {
+    // Sync Group Box data if returning from a Group Box session
+    if (this.currentLootbox && this.currentLootbox.isGroupBox) {
+        await this.syncParticipatedGroupBoxData();
+        
+        // Reload participated group boxes from Firebase to get any new additions
+        try {
+            this.participatedGroupBoxes = await this.loadParticipatedGroupBoxes();
+            console.log('Reloaded participated group boxes from Firebase');
+        } catch (error) {
+            console.error('Error reloading participated group boxes:', error);
+        }
+    }
+    
+    // Clear the current lootbox AFTER syncing
+    this.currentLootbox = null;
+    
+    document.getElementById('lootboxView').classList.add('hidden');
+    document.getElementById('listView').classList.remove('hidden');
+    
+    // Clear session and community history when leaving lootbox view
+    this.sessionHistory = [];
+    this.communityHistory = [];
+    this.updateSessionDisplay();
+    
+    // Reset cooldown and hide popup when leaving lootbox view
+    this.isOnCooldown = false;
+    if (this.popupTimeout) {
+        clearTimeout(this.popupTimeout);
+        this.popupTimeout = null;
+    }
+    const popup = document.getElementById('resultPopup');
+    if (popup) {
+        popup.classList.remove('show');
+    }
+    
+    // Reset organizer readonly flag
+    this.isOrganizerReadonly = false;
+    
+    // Refresh the lootbox list to ensure group boxes are visible
+    this.renderLootboxes();
+}
+
 
 async waitForExtensionsAndInitialize() {
     // Wait for extensions to be available
