@@ -17,55 +17,24 @@ constructor() {
     this.waitForExtensionsAndInitialize();
 }
 async showListView() {
-    // Sync Group Box data if returning from a Group Box session
-    if (this.currentLootbox && this.currentLootbox.isGroupBox) {
-        await this.syncParticipatedGroupBoxData();
-        
-        // Merge local and Firebase data to handle race conditions
-        const local = JSON.parse(localStorage.getItem('participatedGroupBoxes') || '[]');
-        let fetched = [];
-        try {
-            fetched = await this.loadParticipatedGroupBoxes();
-        } catch (error) {
-            console.error('Error loading from Firebase:', error);
-        }
-        
-        // Create a map for merging, keyed by groupBoxId
-        const byId = new Map(local.map(x => [x.groupBoxId, x]));
-        
-        // Merge fetched data, preferring newer data from Firebase
-        for (const x of fetched) {
-            byId.set(x.groupBoxId, { ...byId.get(x.groupBoxId), ...x });
-        }
-        
-        this.participatedGroupBoxes = [...byId.values()];
-        console.log('Merged participated group boxes:', this.participatedGroupBoxes.length);
-    }
-    
-    // Clear the current lootbox AFTER syncing
-    this.currentLootbox = null;
-    
-    // Rest of the function remains the same...
-    document.getElementById('lootboxView').classList.add('hidden');
-    document.getElementById('listView').classList.remove('hidden');
-    
-    this.sessionHistory = [];
-    this.communityHistory = [];
-    this.updateSessionDisplay();
-    
-    this.isOnCooldown = false;
-    if (this.popupTimeout) {
-        clearTimeout(this.popupTimeout);
-        this.popupTimeout = null;
-    }
-    const popup = document.getElementById('resultPopup');
-    if (popup) {
-        popup.classList.remove('show');
-    }
-    
-    this.isOrganizerReadonly = false;
-    
-    this.renderLootboxes();
+  if (this.currentLootbox?.isGroupBox) {
+    // Update the just-used box in-place
+    await this.syncParticipatedGroupBoxData?.();
+
+    // Merge remote + local; never overwrite with an empty remote hit
+    let remote = [];
+    try { remote = await this.loadParticipatedGroupBoxes(); } catch {}
+    const local = JSON.parse(localStorage.getItem('participatedGroupBoxes') || '[]');
+
+    const byId = new Map(local.map(x => [x.groupBoxId, x]));
+    for (const x of remote) byId.set(x.groupBoxId, { ...(byId.get(x.groupBoxId)||{}), ...x });
+    this.participatedGroupBoxes = [...byId.values()];
+  }
+
+  this.currentLootbox = null;
+  document.getElementById('lootboxView').classList.add('hidden');
+  document.getElementById('listView').classList.remove('hidden');
+  this.renderLootboxes();
 }
 
 async waitForExtensionsAndInitialize() {
@@ -886,40 +855,6 @@ attachEventListeners() {
         this.renderLootboxes();
     }
 
-    showListView() {
-    // Sync Group Box data if returning from a Group Box session
-    if (this.currentLootbox && this.currentLootbox.isGroupBox) {
-        this.syncParticipatedGroupBoxData();
-    }
-    
-    // Clear the current lootbox AFTER syncing
-    this.currentLootbox = null;
-    
-    document.getElementById('lootboxView').classList.add('hidden');
-    document.getElementById('listView').classList.remove('hidden');
-    
-    // Clear session and community history when leaving lootbox view
-    this.sessionHistory = [];
-    this.communityHistory = [];
-    this.updateSessionDisplay();
-    
-    // Reset cooldown and hide popup when leaving lootbox view
-    this.isOnCooldown = false;
-    if (this.popupTimeout) {
-        clearTimeout(this.popupTimeout);
-        this.popupTimeout = null;
-    }
-    const popup = document.getElementById('resultPopup');
-    if (popup) {
-        popup.classList.remove('show');
-    }
-    
-    // Reset organizer readonly flag
-    this.isOrganizerReadonly = false;
-    
-    // Refresh the lootbox list to ensure group boxes are visible
-    this.renderLootboxes();
-    }
 
     showMenu() {
         console.log('Hamburger menu clicked - implement features like export, import, settings, etc.');
@@ -1332,6 +1267,9 @@ function closeGroupBoxEditModal() {
 // Initialize app
 window.app = new LootboxApp();
 const app = window.app;
+
+// Hook browser/OS back so it behaves like your in-app arrow
+window.addEventListener('popstate', () => app.showListView());
 
 // Handle shared lootboxes and group boxes
 const urlParams = new URLSearchParams(window.location.search);

@@ -461,9 +461,10 @@ const GroupBoxExtension = {
 
             console.log('Successfully loaded Group Box:', groupBoxData.lootboxData.name);
             
-            // Clean up URL after successful load
-            const newUrl = window.location.origin + window.location.pathname;
-            window.history.replaceState({}, document.title, newUrl);
+            // Clean up URL after successful load and setup history for back button
+            const clean = window.location.origin + window.location.pathname;
+            window.history.replaceState({view:'groupbox'}, '', clean);  // remove ?groupbox
+            window.history.pushState({view:'groupbox'}, '', clean + '#gb'); // make Back land in list view
 
         } catch (error) {
             console.error('Error loading Group Box:', error);
