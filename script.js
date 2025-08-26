@@ -21,12 +21,18 @@ async showListView() {
     if (this.currentLootbox && this.currentLootbox.isGroupBox) {
         await this.syncParticipatedGroupBoxData();
         
-        // Reload participated group boxes from Firebase to get any new additions
+        // Always reload from Firebase when returning from a group box
+        // This ensures we get any newly joined group boxes
         try {
             this.participatedGroupBoxes = await this.loadParticipatedGroupBoxes();
             console.log('Reloaded participated group boxes from Firebase');
         } catch (error) {
             console.error('Error reloading participated group boxes:', error);
+            // Fall back to localStorage if Firebase fails
+            const saved = localStorage.getItem('participatedGroupBoxes');
+            if (saved) {
+                this.participatedGroupBoxes = JSON.parse(saved);
+            }
         }
     }
     

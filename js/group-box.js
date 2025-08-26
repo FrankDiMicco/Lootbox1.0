@@ -422,7 +422,11 @@ const GroupBoxExtension = {
                 app.participatedGroupBoxes.push(participatedGroupBoxData);
             }
 
-            // Save to Firebase and localStorage
+            // IMMEDIATELY save to localStorage before any async operations
+            localStorage.setItem('participatedGroupBoxes', JSON.stringify(app.participatedGroupBoxes));
+            console.log('Saved participated group boxes to localStorage immediately');
+
+            // Save to Firebase in background (async)
             await app.saveParticipatedGroupBox(participatedGroupBoxData);
             
             // Record join event if this is the user's first time accessing this group box
