@@ -14,7 +14,7 @@
                 <span></span>
                 <span></span>
             </button>
-            <h1 class="title">Lootbox Creator Refactored</h1>
+            <h1 class="title">Lootbox Creator Claude</h1>
         </div>
     </div>
 
@@ -41,14 +41,14 @@
 
     <!-- Individual Lootbox View -->
     <div id="lootboxView" class="container hidden">
-        <button class="back-btn" onclick="showListView()">←</button>
+        <button class="back-btn" data-action="show-list">←</button>
         
         <div class="lootbox-view">
             <h2 id="lootboxTitle">Default Lootbox</h2>
             <div class="tries-info" id="triesInfo">Unlimited tries</div>
             
             <div class="lootbox-circle" id="lootboxCircle">
-                <button id="openButton" aria-label="Open lootbox"></button>
+                <button id="openButton" aria-label="Open lootbox" data-action="spin-lootbox"></button>
             </div>
             
             <div id="lootboxItems" class="lootbox-items">
@@ -70,21 +70,21 @@
                     <div class="no-history">No pulls yet this session</div>
                 </div>
                 <div class="history-controls">
-                    <button class="btn btn-secondary" onclick="app.clearHistory()">Clear History</button>
+                    <button class="btn btn-secondary" data-action="clear-history">Clear History</button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Floating Add Button -->
-    <button class="nav-btn add-btn" onclick="createNewLootbox()">+</button>
+    <button class="nav-btn add-btn" data-action="create-lootbox">+</button>
 
     <!-- Create/Edit Modal -->
     <div id="editModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="modal-title" id="modalTitle">Create New Lootbox</h3>
-                <button class="close-btn" onclick="closeModal()">&times;</button>
+                <button class="close-btn" data-action="close-modal" data-modal="editModal">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
@@ -123,29 +123,28 @@
                 <div class="items-section">
                     <div class="items-header">
                         <h4>Items & Odds</h4>
-                        <button class="add-item-btn" onclick="addItemRow()">+ Add Item</button>
+                        <button class="add-item-btn" data-action="add-item-row">+ Add Item</button>
                     </div>
                     <div id="itemsList">
                         <!-- Items will be added here -->
                     </div>
                     <div id="itemsError" class="error-message hidden">Must have at least one item</div>
                     <div class="odds-total">
-                        <button class="even-odds-btn" onclick="evenlyDistributeOdds()" title="Evenly distribute odds across all items">Equalize</button>
-                        <button class="even-odds-btn" onclick="randomizeOdds()" title="Randomly distribute odds across all items">Randomize</button>
+                        <button class="even-odds-btn" data-action="even-odds" title="Evenly distribute odds across all items">Equalize</button>
+                        <button class="even-odds-btn" data-action="random-odds" title="Randomly distribute odds across all items">Randomize</button>
                         Total odds: <span id="totalOdds">0.000</span>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="saveLootbox()">Save</button>
+                <button class="btn btn-secondary" data-action="close-modal" data-modal="editModal">Cancel</button>
+                <button class="btn btn-primary" data-action="save-lootbox">Save</button>
             </div>
         </div>
     </div>
 
     <!-- Result Popup -->
     <div id="resultPopup" class="result-popup">
-        <!--<h3>You got:</h3>-->
         <div id="resultItem" class="result-item"></div>
     </div>
 
@@ -160,8 +159,8 @@
                 <p class="delete-warning">This action cannot be undone.</p>
             </div>
             <div class="delete-modal-footer">
-                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
-                <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+                <button class="btn btn-secondary" data-action="close-modal" data-modal="deleteModal">Cancel</button>
+                <button class="btn btn-danger" data-action="confirm-delete" data-type="lootbox">Delete</button>
             </div>
         </div>
     </div>
@@ -176,13 +175,13 @@
                 <p>You created <strong id="creatorDeleteBoxName"></strong></p>
                 <p>How would you like to delete it?</p>
                 <div class="share-options" style="margin-top: 20px;">
-                    <button class="share-option-btn" onclick="app.deleteForEveryone()" style="border-color: #ef4444;">
+                    <button class="share-option-btn" data-action="delete-group-everyone" style="border-color: #ef4444;">
                         <div class="share-option-content">
                             <h4 style="color: #dc2626;">Delete for Everyone</h4>
                             <p>Permanently delete this Group Box for all participants</p>
                         </div>
                     </button>
-                    <button class="share-option-btn" onclick="app.deleteJustForMe()">
+                    <button class="share-option-btn" data-action="delete-group-me">
                         <div class="share-option-content">
                             <h4>Remove from My View</h4>
                             <p>Hide this Group Box from your view only</p>
@@ -191,7 +190,7 @@
                 </div>
             </div>
             <div class="delete-modal-footer">
-                <button class="btn btn-secondary" onclick="app.closeCreatorDeleteModal()">Cancel</button>
+                <button class="btn btn-secondary" data-action="close-modal" data-modal="creatorDeleteModal">Cancel</button>
             </div>
         </div>
     </div>
@@ -201,19 +200,19 @@
         <div class="modal-content share-modal-content">
             <div class="share-modal-header">
                 <h3>Share Options</h3>
-                <button class="close-btn" onclick="closeShareModal()">&times;</button>
+                <button class="close-btn" data-action="close-modal" data-modal="shareModal">&times;</button>
             </div>
             <div class="share-modal-body">
                 <p>Choose how you want to share <strong id="shareLootboxName"></strong>:</p>
                 <div class="share-options">
-                    <button class="share-option-btn" onclick="shareAsLootbox()">
+                    <button class="share-option-btn" data-action="share-as-lootbox">
                         <img src="assets/graphics/share.png" alt="Share" class="share-option-icon">
                         <div class="share-option-content">
                             <h4>Share Lootbox</h4>
                             <p>Share as a personal lootbox that others can import</p>
                         </div>
                     </button>
-                    <button class="share-option-btn" onclick="shareAsGroupBox()">
+                    <button class="share-option-btn" data-action="share-as-groupbox">
                         <img src="assets/graphics/groupBoxImage.png" alt="Group Box" class="share-option-icon">
                         <div class="share-option-content">
                             <h4>Group Box</h4>
@@ -223,7 +222,7 @@
                 </div>
             </div>
             <div class="share-modal-footer">
-                <button class="btn btn-secondary" onclick="closeShareModal()">Cancel</button>
+                <button class="btn btn-secondary" data-action="close-modal" data-modal="shareModal">Cancel</button>
             </div>
         </div>
     </div>
@@ -233,7 +232,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="modal-title">Create Group Box</h3>
-                <button class="close-btn" onclick="closeGroupBoxModal()">&times;</button>
+                <button class="close-btn" data-action="close-modal" data-modal="groupBoxModal">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
@@ -278,8 +277,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeGroupBoxModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="createGroupBox()">Create Group Box</button>
+                <button class="btn btn-secondary" data-action="close-modal" data-modal="groupBoxModal">Cancel</button>
+                <button class="btn btn-primary" data-action="create-group-box">Create Group Box</button>
             </div>
         </div>
     </div>
@@ -289,7 +288,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="modal-title">Edit Group Box</h3>
-                <button class="close-btn" onclick="closeGroupBoxEditModal()">&times;</button>
+                <button class="close-btn" data-action="close-modal" data-modal="groupBoxEditModal">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
@@ -299,13 +298,13 @@
                 <div class="edit-section">
                     <div class="edit-section-header">
                         <h4>Items & Odds</h4>
-                        <button class="add-edit-item-btn" onclick="app.addEditItem()" type="button">+ Add Item</button>
+                        <button class="add-edit-item-btn" data-action="add-edit-item" type="button">+ Add Item</button>
                     </div>
                     <div id="editItemsList" class="edit-items-list">
                         <!-- Items will be populated here -->
                     </div>
                     <div class="edit-odds-total">
-                        <button class="even-odds-btn" onclick="app.evenlyDistributeEditOdds()" type="button" title="Evenly distribute odds across all items">Equalize</button>
+                        <button class="even-odds-btn" data-action="even-edit-odds" type="button" title="Evenly distribute odds across all items">Equalize</button>
                         <span>Total odds: <span id="editTotalOdds">0.000</span></span>
                     </div>
                 </div>
@@ -318,8 +317,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeGroupBoxEditModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="app.saveGroupBoxChanges()" type="button">Save Changes</button>
+                <button class="btn btn-secondary" data-action="close-modal" data-modal="groupBoxEditModal">Cancel</button>
+                <button class="btn btn-primary" data-action="save-group-changes" type="button">Save Changes</button>
             </div>
         </div>
     </div>
@@ -335,43 +334,28 @@
     <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Legacy scripts for backward compatibility -->
-    <script src="script.js"></script>
-    <script src="js/group-box.js"></script>
-    <script src="js/ui-renderer.js"></script>
-
-    <!-- Modern modular architecture -->
-    <!-- 1. Services (data and external integrations) -->
-    <script type="module" src="src/services/FirebaseService.js"></script>
-    <script type="module" src="src/services/StorageService.js"></script>
-
-    <!-- 2. Models (data structures and validation) -->
-    <script type="module" src="src/models/Lootbox.js"></script>
-    <script type="module" src="src/models/GroupBox.js"></script>
-
-    <!-- 3. Views (UI components) -->
+    <!-- Load the modular application -->
     <script type="module">
-        import LootboxCard from './src/views/components/LootboxCard.js';
-        import GroupBoxCard from './src/views/components/GroupBoxCard.js';
+        // Import and initialize the app
+        import app from './src/core/App.js';
         
-        // Make components globally available for backward compatibility
-        window.LootboxCard = LootboxCard;
-        window.GroupBoxCard = GroupBoxCard;
-    </script>
-
-    <!-- 4. Controllers (business logic) -->
-    <script type="module" src="src/controllers/LootboxController.js"></script>
-    <script type="module" src="src/controllers/GroupBoxController.js"></script>
-
-    <!-- 5. Core App (orchestration and initialization) -->
-    <script type="module">
-        import App from './src/core/App.js';
+        // Make app globally available for legacy onclick handlers
+        window.app = app;
         
-        // Initialize the new modular app
-        window.modernApp = new App();
-        
-        // Maintain backward compatibility by keeping the old app reference
-        // The new App will extend itself with legacy methods for compatibility
+        // Add legacy function wrappers for backwards compatibility
+        window.createNewLootbox = () => app.handleAction('create-lootbox', {});
+        window.showMenu = () => console.log('Menu not implemented yet');
+        window.toggleSessionHistory = () => {
+            const content = document.getElementById('sessionContent');
+            const button = document.getElementById('toggleButton');
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                button.textContent = '▼';
+            } else {
+                content.classList.add('collapsed');
+                button.textContent = '▶';
+            }
+        };
     </script>
 </body>
 </html>

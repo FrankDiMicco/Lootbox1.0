@@ -1,378 +1,546 @@
-import FirebaseService from '../services/FirebaseService.js';
-import StorageService from '../services/StorageService.js';
-import LootboxController from '../controllers/LootboxController.js';
-import GroupBoxController from '../controllers/GroupBoxController.js';
+// src/core/App.js
+import FirebaseService from "../services/FirebaseService.js";
+import StorageService from "../services/StorageService.js";
+import LootboxController from "../controllers/LootboxController.js";
+import GroupBoxController from "../controllers/GroupBoxController.js";
+import UIController from "../controllers/UIController.js";
+import Router from "./Router.js";
 
-/**
- * Main application coordinator
- * Handles initialization, service coordination, and high-level orchestration
- */
 class App {
-    constructor() {
-        // Application state
-        this.isInitialized = false;
-        this.currentView = 'list';
-        this.currentLootbox = null;
-        this.currentFilter = 'all';
-        this.isOnCooldown = false;
-        
-        // Services and controllers - will be initialized later
-        this.firebaseService = null;
-        this.storageService = null;
-        this.lootboxController = null;
-        this.groupBoxController = null;
-        
-        // UI state
-        this.sessionHistory = [];
-        this.isOrganizerReadonly = false;
-        this.editingIndex = -1;
-        this.selectedChestPath = null;
-        this.popupTimeout = null;
-        
-        // Start initialization
-        this.initialize();
+  constructor() {
+    // Services
+    this.services = {
+      storage: null,
+      firebase: null,
+    };
+
+    // Controllers
+    this.controllers = {
+      lootbox: null,
+      groupBox: null,
+      ui: null,
+    };
+
+    // Router
+    this.router = null;
+
+    // Application state
+    this.state = {
+      currentView: "list",
+      currentFilter: "all",
+      currentLootbox: null,
+      currentLootboxIndex: -1,
+      sessionHistory: [],
+      communityHistory: [],
+      isOnCooldown: false,
+      popupTimeout: null,
+      editingIndex: -1,
+      selectedChestPath: null,
+      isOrganizerReadonly: false,
+      pendingDeleteIndex: undefined,
+      pendingDeleteGroupBoxId: undefined,
+      sharingLootboxIndex: undefined,
+      currentEditGroupBoxId: undefined,
+    };
+
+    // Track initialization
+    this.isInitialized = false;
+  }
+
+  async initialize() {
+    try {
+      console.log("Initializing Lootbox Creator...");
+
+      // Initialize services
+      this.services.storage = new StorageService("lootbox_");
+      this.services.firebase = new FirebaseService();
+      await this.services.firebase.initialize();
+
+      // Initialize controllers with dependency injection
+      this.controllers.lootbox = new LootboxController(
+        this.services.firebase,
+        this.services.storage
+      );
+
+      this.controllers.groupBox = new GroupBoxController(
+        this.services.firebase,
+        this.services.storage
+      );
+
+      this.controllers.ui = new UIController(
+        this.controllers.lootbox,
+        this.controllers.groupBox,
+        this.state
+      );
+
+      // Initialize router
+      this.router = new Router(this);
+
+      // Load initial data
+      await this.loadInitialData();
+
+      // Set up event delegation
+      this.setupEventDelegation();
+
+      // Handle URL parameters (share links, group box joins)
+      await this.router.handleCurrentRoute();
+
+      // Mark as initialized
+      this.isInitialized = true;
+
+      // Initial render
+      this.controllers.ui.render();
+
+      console.log("Application initialized successfully");
+    } catch (error) {
+      console.error("Failed to initialize application:", error);
+      this.showError(error.message);
     }
+  }
 
-    /**
-     * Initialize the application
-     */
-    async initialize() {
-        try {
-            console.log('Initializing Lootbox Creator...');
-            
-            // Wait for dependencies to be available
-            await this.waitForDependencies();
-            
-            // Initialize services
-            await this.initializeServices();
-            
-            // Initialize controllers
-            await this.initializeControllers();
-            
-            // Set up event listeners
-            this.setupEventListeners();
-            
-            // Load initial data
-            await this.loadInitialData();
-            
-            // Set up URL handlers
-            this.setupUrlHandlers();
-            
-            // Mark as initialized
-            this.isInitialized = true;
-            
-            // Trigger initial render
-            this.render();
-            
-            console.log('Application initialized successfully');
-            
-        } catch (error) {
-            console.error('Failed to initialize application:', error);
-            this.showErrorState(error.message);
-        }
-    }
+  async loadInitialData() {
+    console.log("Loading initial data...");
 
-    /**
-     * Wait for required dependencies to be available
-     */
-    async waitForDependencies() {
-        // Wait for UI extensions to load
-        while (!window.UIRenderer || !window.GroupBoxExtension) {
-            await new Promise(resolve => setTimeout(resolve, 50));
-        }
-        
-        // Extend this app instance with UI methods for backward compatibility
-        Object.assign(this, window.UIRenderer);
-        Object.assign(this, window.GroupBoxExtension);
-    }
+    // Initialize controllers (they load their own data)
+    await Promise.all([
+      this.controllers.lootbox.initialize(),
+      this.controllers.groupBox.initialize(),
+    ]);
 
-    /**
-     * Initialize all services
-     */
-    async initializeServices() {
-        console.log('Initializing services...');
-        
-        // Initialize storage service
-        this.storageService = new StorageService('lootbox_');
-        
-        // Initialize Firebase service
-        this.firebaseService = new FirebaseService();
-        await this.firebaseService.initialize();
-        
-        console.log('Services initialized');
-    }
+    console.log("Initial data loaded");
+  }
 
-    /**
-     * Initialize all controllers
-     */
-    async initializeControllers() {
-        console.log('Initializing controllers...');
-        
-        // Initialize controllers with their dependencies
-        this.lootboxController = new LootboxController(this.firebaseService, this.storageService);
-        this.groupBoxController = new GroupBoxController(this.firebaseService, this.storageService);
-        
-        // Initialize controllers
-        await this.lootboxController.initialize();
-        await this.groupBoxController.initialize();
-        
-        console.log('Controllers initialized');
-    }
+  setupEventDelegation() {
+    // Single event listener at document level for all clicks
+    document.addEventListener("click", async (e) => {
+      const action = e.target.closest("[data-action]");
+      if (!action) return;
 
-    /**
-     * Set up global event listeners
-     */
-    setupEventListeners() {
-        // Filter buttons
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                this.setFilter(e.target.dataset.filter);
-            });
-        });
+      e.preventDefault();
+      e.stopPropagation();
 
-        // Modal checkbox listeners
-        const unlimitedTriesCheckbox = document.getElementById('unlimitedTries');
-        if (unlimitedTriesCheckbox) {
-            unlimitedTriesCheckbox.addEventListener('change', (e) => {
-                const maxTriesGroup = document.getElementById('maxTriesGroup');
-                if (maxTriesGroup) {
-                    maxTriesGroup.style.display = e.target.checked ? 'none' : 'block';
-                }
-            });
-        }
+      await this.handleAction(action.dataset.action, action.dataset);
+    });
 
-        // Group box unlimited tries checkbox
-        const unlimitedGroupTriesCheckbox = document.getElementById('unlimitedGroupTries');
-        if (unlimitedGroupTriesCheckbox) {
-            unlimitedGroupTriesCheckbox.addEventListener('change', (e) => {
-                const triesPerPersonInput = document.getElementById('triesPerPerson');
-                if (triesPerPersonInput) {
-                    triesPerPersonInput.disabled = e.target.checked;
-                    if (e.target.checked) {
-                        triesPerPersonInput.style.opacity = '0.5';
-                    } else {
-                        triesPerPersonInput.style.opacity = '1';
-                    }
-                }
-            });
-        }
+    // Form submissions
+    document.addEventListener("submit", async (e) => {
+      const form = e.target;
+      if (form.dataset.action) {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData);
+        await this.handleAction(form.dataset.action, data);
+      }
+    });
 
-        // Modal close on backdrop click
-        const editModal = document.getElementById('editModal');
-        if (editModal) {
-            editModal.addEventListener('click', (e) => {
-                if (e.target.id === 'editModal') {
-                    this.closeModal();
-                }
-            });
-        }
+    // Modal close on backdrop click
+    document.addEventListener("click", (e) => {
+      if (
+        e.target.classList.contains("modal") &&
+        e.target.classList.contains("show")
+      ) {
+        this.controllers.ui.closeModal(e.target.id);
+      }
+    });
 
-        // Browser back/forward navigation
-        window.addEventListener('popstate', () => {
-            if (this.currentView !== 'list') {
-                this.showListView();
-            }
-        });
-    }
+    // Browser back/forward navigation
+    window.addEventListener("popstate", () => {
+      if (this.state.currentView !== "list") {
+        this.controllers.ui.showListView();
+      }
+    });
+  }
 
-    /**
-     * Load initial application data
-     */
-    async loadInitialData() {
-        console.log('Loading initial data...');
-        
-        // Controllers handle their own data loading during initialization
-        // Just need to update the UI references for backward compatibility
-        this.lootboxes = this.lootboxController.getAllLootboxes();
-        this.participatedGroupBoxes = this.groupBoxController.getAllGroupBoxes();
-        this.communityHistory = this.groupBoxController.getCommunityHistory();
-        
-        // Make community history globally accessible for GroupBoxCard
-        if (window.modernApp) {
-            window.modernApp.communityHistory = this.communityHistory;
-        }
-        
-        console.log(`Loaded ${this.lootboxes.length} lootboxes and ${this.participatedGroupBoxes.length} group boxes`);
-    }
+  async handleAction(action, data) {
+    if (!this.isInitialized) return;
 
-    /**
-     * Set up URL parameter handlers
-     */
-    setupUrlHandlers() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const sharedData = urlParams.get('share');
-        const groupBoxId = urlParams.get('groupbox');
+    console.log("Handling action:", action, data);
 
-        if (sharedData) {
-            this.handleSharedLootbox(sharedData);
-        }
-
-        if (groupBoxId) {
-            this.handleGroupBoxUrl(groupBoxId);
-        }
-    }
-
-    /**
-     * Handle shared lootbox URL
-     */
-    async handleSharedLootbox(sharedData) {
-        try {
-            const lootboxData = JSON.parse(decodeURIComponent(sharedData));
-            const result = await this.lootboxController.importSharedLootbox(lootboxData);
-            
+    try {
+      switch (action) {
+        // Lootbox actions
+        case "open-lootbox":
+          // Clear session history when opening a different lootbox
+          const newIndex = parseInt(data.index);
+          if (this.state.currentLootboxIndex !== newIndex) {
+            this.state.sessionHistory = [];
+          }
+          await this.controllers.ui.openLootbox(newIndex);
+          break;
+        case "confirm-delete":
+          if (
+            data.type === "lootbox" &&
+            this.state.pendingDeleteIndex !== undefined
+          ) {
+            const result = await this.controllers.lootbox.deleteLootbox(
+              this.state.pendingDeleteIndex
+            );
             if (result.success) {
-                this.showSuccessMessage(`Successfully imported "${result.lootbox.name}"`);
-                this.refreshData();
-            } else if (result.duplicate) {
-                this.showSuccessMessage(result.errors[0], true);
-            } else {
-                this.showSuccessMessage('Error importing lootbox', true);
+              this.controllers.ui.showToast(
+                `"${result.deletedName}" has been deleted`
+              );
+              this.controllers.ui.closeModal("deleteModal");
+              this.controllers.ui.render();
             }
-        } catch (error) {
-            console.error('Error handling shared lootbox:', error);
-            this.showSuccessMessage('Error importing lootbox. Invalid share link.', true);
+            this.state.pendingDeleteIndex = undefined;
+          }
+          break;
+
+        case "create-lootbox":
+          this.controllers.ui.showCreateModal();
+          break;
+
+        case "edit-lootbox":
+          this.controllers.ui.showEditModal(parseInt(data.index));
+          break;
+
+        case "delete-lootbox":
+          await this.handleDeleteLootbox(parseInt(data.index));
+          break;
+
+        case "share-lootbox":
+          this.controllers.ui.showShareModal(parseInt(data.index));
+          break;
+
+        case "toggle-favorite":
+          await this.controllers.lootbox.toggleFavorite(parseInt(data.index));
+          this.controllers.ui.render();
+          break;
+
+        case "spin-lootbox":
+          await this.handleSpinLootbox();
+          break;
+
+        case "save-lootbox":
+          await this.handleSaveLootbox(data);
+          break;
+
+        // Group box actions
+        case "open-group-box":
+          await this.controllers.ui.openGroupBox(data.id);
+          break;
+
+        case "create-group-box":
+          await this.handleCreateGroupBox(data);
+          break;
+
+        case "delete-group-box":
+          await this.handleDeleteGroupBox(data.id);
+          break;
+
+        case "share-group-box":
+          this.controllers.ui.showGroupBoxShareModal(data.id);
+          break;
+
+        case "toggle-group-favorite":
+          await this.controllers.groupBox.toggleGroupBoxFavorite(data.id);
+          this.controllers.ui.render();
+          break;
+
+        case "edit-group-box":
+          this.controllers.ui.showEditGroupBoxModal(data.id);
+          break;
+
+        // Navigation
+        case "show-list":
+          this.controllers.ui.showListView();
+          break;
+
+        case "set-filter":
+          this.controllers.ui.setFilter(data.filter);
+          break;
+
+        // Modal actions
+        case "close-modal":
+          this.controllers.ui.closeModal(data.modal);
+          break;
+
+        case "add-item-row":
+          this.controllers.ui.addItemRow();
+          break;
+
+        case "remove-item":
+          this.controllers.ui.removeItemRow(data.index);
+          break;
+
+        case "even-odds":
+          this.controllers.ui.distributeOddsEvenly();
+          break;
+
+        case "random-odds":
+          this.controllers.ui.randomizeOdds();
+          break;
+
+        // Utility
+        case "clear-history":
+          this.clearSessionHistory();
+          break;
+
+        case "copy-to-clipboard":
+          await this.copyToClipboard(data.text);
+          break;
+
+        case "reload":
+          window.location.reload();
+          break;
+
+        default:
+          console.warn("Unknown action:", action);
+      }
+    } catch (error) {
+      console.error(`Error handling action ${action}:`, error);
+      this.controllers.ui.showToast(`Error: ${error.message}`, "error");
+    }
+  }
+
+  async handleSpinLootbox() {
+    if (this.state.isOnCooldown) return;
+
+    const lootbox = this.state.currentLootbox;
+    if (!lootbox) return;
+
+    // Check if this is a group box spin
+    if (lootbox.isGroupBox) {
+      if (this.state.isOrganizerReadonly) {
+        this.controllers.ui.showToast("Organizer view - opens disabled");
+        return;
+      }
+
+      const result = await this.controllers.groupBox.spinGroupBox(
+        lootbox.groupBoxId
+      );
+      if (result.success) {
+        this.handleSpinResult(result.result);
+      } else {
+        this.controllers.ui.showToast(result.errors[0], "error");
+      }
+    } else {
+      // Regular lootbox spin
+      const result = await this.controllers.lootbox.spinLootbox(
+        this.state.currentLootboxIndex
+      );
+      if (result.success) {
+        this.handleSpinResult(result.result);
+      } else {
+        this.controllers.ui.showToast(result.errors[0], "error");
+      }
+    }
+  }
+
+  handleSpinResult(result) {
+    // Set cooldown
+    this.state.isOnCooldown = true;
+    this.controllers.ui.updateLootboxInteractivity();
+
+    // Add to history
+    if (this.state.currentLootbox.isGroupBox) {
+      this.state.communityHistory.unshift({
+        userId: this.services.firebase.getCurrentUser()?.uid || "anonymous",
+        userName: "You",
+        item: result.item,
+        timestamp: new Date(),
+      });
+    } else {
+      this.state.sessionHistory.unshift({
+        item: result.item,
+        timestamp: new Date(),
+        lootboxName: this.state.currentLootbox.name,
+      });
+    }
+
+    // Show result popup
+    this.controllers.ui.showResultPopup(result.item);
+
+    // Update display
+    this.controllers.ui.updateSessionDisplay();
+    this.controllers.ui.renderLootboxView();
+
+    // Clear cooldown after 1.5 seconds
+    setTimeout(() => {
+      this.state.isOnCooldown = false;
+      this.controllers.ui.updateLootboxInteractivity();
+    }, 1500);
+  }
+
+  async handleSaveLootbox(formData) {
+    const lootboxData = this.controllers.ui.collectLootboxFormData(formData);
+
+    if (this.state.editingIndex >= 0) {
+      // Update existing
+      const result = await this.controllers.lootbox.updateLootbox(
+        this.state.editingIndex,
+        lootboxData
+      );
+
+      if (result.success) {
+        this.controllers.ui.closeModal("editModal");
+        this.controllers.ui.showToast("Lootbox updated successfully");
+        this.controllers.ui.render();
+      } else {
+        this.controllers.ui.showFormErrors(result.errors);
+      }
+    } else {
+      // Create new
+      const result = await this.controllers.lootbox.createLootbox(lootboxData);
+
+      if (result.success) {
+        this.controllers.ui.closeModal("editModal");
+        this.controllers.ui.showToast("Lootbox created successfully");
+        this.controllers.ui.render();
+      } else {
+        this.controllers.ui.showFormErrors(result.errors);
+      }
+    }
+  }
+
+  async handleCreateGroupBox(formData) {
+    const settings = this.controllers.ui.collectGroupBoxFormData(formData);
+    const lootboxData = this.state.sharingLootboxCopy;
+
+    if (!lootboxData) {
+      this.controllers.ui.showToast("No lootbox selected for sharing", "error");
+      return;
+    }
+
+    const result = await this.controllers.groupBox.createGroupBox(
+      lootboxData,
+      settings
+    );
+
+    if (result.success) {
+      this.controllers.ui.closeModal("groupBoxModal");
+      const shareUrl = this.controllers.groupBox.generateGroupBoxShareUrl(
+        result.groupBoxId
+      );
+
+      if (shareUrl.success) {
+        await this.shareUrl(shareUrl.url, shareUrl.groupBoxName);
+      }
+
+      this.controllers.ui.render();
+    } else {
+      this.controllers.ui.showToast(result.errors[0], "error");
+    }
+  }
+
+  async handleDeleteLootbox(index) {
+    const lootbox = this.controllers.lootbox.getLootbox(index);
+    if (!lootbox) return;
+
+    this.state.pendingDeleteIndex = index;
+
+    // Show the delete modal directly
+    const modal = document.getElementById("deleteModal");
+    const nameEl = document.getElementById("deleteLootboxName");
+    if (modal && nameEl) {
+      nameEl.textContent = lootbox.name;
+      modal.classList.add("show");
+    }
+  }
+
+  async handleDeleteGroupBox(groupBoxId) {
+    const groupBox = this.controllers.groupBox.getGroupBox(groupBoxId);
+    if (!groupBox) return;
+
+    this.state.pendingDeleteGroupBoxId = groupBoxId;
+
+    if (groupBox.isCreator) {
+      this.controllers.ui.showCreatorDeleteModal(groupBox);
+    } else {
+      this.controllers.ui.showDeleteConfirmModal(
+        groupBox.groupBoxName,
+        "groupbox"
+      );
+    }
+  }
+
+  async confirmDelete(type, deleteForEveryone = false) {
+    if (type === "lootbox" && this.state.pendingDeleteIndex !== undefined) {
+      const result = await this.controllers.lootbox.deleteLootbox(
+        this.state.pendingDeleteIndex
+      );
+      if (result.success) {
+        this.controllers.ui.showToast(
+          `"${result.deletedName}" has been deleted`
+        );
+        this.controllers.ui.render();
+      }
+      this.state.pendingDeleteIndex = undefined;
+    } else if (type === "groupbox" && this.state.pendingDeleteGroupBoxId) {
+      const result = await this.controllers.groupBox.deleteGroupBox(
+        this.state.pendingDeleteGroupBoxId,
+        deleteForEveryone
+      );
+      if (result.success) {
+        const message = deleteForEveryone
+          ? `"${result.groupBoxName}" deleted for everyone`
+          : `Left "${result.groupBoxName}" Group Box`;
+        this.controllers.ui.showToast(message);
+        this.controllers.ui.render();
+      }
+      this.state.pendingDeleteGroupBoxId = undefined;
+    }
+
+    this.controllers.ui.closeDeleteModals();
+  }
+
+  clearSessionHistory() {
+    if (this.state.currentLootbox?.isGroupBox) {
+      this.state.communityHistory = [];
+    } else {
+      this.state.sessionHistory = [];
+    }
+    this.controllers.ui.updateSessionDisplay();
+  }
+
+  async shareUrl(url, name) {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: name,
+          url: url,
+        });
+        this.controllers.ui.showToast("Shared successfully");
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          await this.copyToClipboard(url);
         }
-        
-        // Clean up URL
-        this.cleanupUrl();
+      }
+    } else {
+      await this.copyToClipboard(url);
     }
+  }
 
-    /**
-     * Handle group box URL
-     */
-    async handleGroupBoxUrl(groupBoxId) {
-        try {
-            const result = await this.groupBoxController.joinGroupBox(groupBoxId);
-            
-            if (result.success) {
-                if (result.alreadyJoined) {
-                    // Open existing group box
-                    this.openGroupBox(result.groupBox);
-                } else {
-                    // Show join success message
-                    this.showSuccessMessage(`Joined "${result.groupBox.groupBoxName}"`);
-                    this.refreshData();
-                }
-            } else {
-                this.showSuccessMessage('Error joining group box', true);
-            }
-        } catch (error) {
-            console.error('Error handling group box URL:', error);
-            this.showSuccessMessage('Error joining group box', true);
-        }
-        
-        // Clean up URL
-        this.cleanupUrl();
+  async copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      this.controllers.ui.showToast("Copied to clipboard");
+    } catch (error) {
+      console.error("Failed to copy:", error);
+      this.controllers.ui.showToast("Failed to copy to clipboard", "error");
     }
+  }
 
-    /**
-     * Set the current filter and refresh display
-     */
-    setFilter(filter) {
-        this.currentFilter = filter;
-        this.render();
-    }
-
-    /**
-     * Show list view
-     */
-    showListView() {
-        this.currentLootbox = null;
-        this.currentView = 'list';
-        document.getElementById('lootboxView').classList.add('hidden');
-        document.getElementById('listView').classList.remove('hidden');
-        this.render();
-    }
-
-    /**
-     * Refresh data from controllers
-     */
-    async refreshData() {
-        this.lootboxes = this.lootboxController.getAllLootboxes();
-        this.participatedGroupBoxes = this.groupBoxController.getAllGroupBoxes();
-        this.communityHistory = this.groupBoxController.getCommunityHistory();
-        
-        // Make community history globally accessible for GroupBoxCard
-        if (window.modernApp) {
-            window.modernApp.communityHistory = this.communityHistory;
-        }
-        
-        this.render();
-    }
-
-    /**
-     * Render the current view
-     */
-    render() {
-        if (!this.isInitialized) {
-            return;
-        }
-
-        // Always update community history reference for GroupBoxCard
-        this.communityHistory = this.groupBoxController.getCommunityHistory();
-        if (window.modernApp) {
-            window.modernApp.communityHistory = this.communityHistory;
-        }
-
-        if (this.currentView === 'list') {
-            this.renderLootboxes();
-        } else if (this.currentView === 'lootbox') {
-            this.renderLootboxView();
-            this.updateSessionDisplay();
-        }
-    }
-
-    /**
-     * Open a group box
-     */
-    openGroupBox(groupBox) {
-        this.currentLootbox = groupBox;
-        this.currentView = 'lootbox';
-        this.sessionHistory = [];
-        this.isOrganizerReadonly = groupBox.isOrganizerOnly || false;
-        
-        document.getElementById('listView').classList.add('hidden');
-        document.getElementById('lootboxView').classList.remove('hidden');
-        
-        this.render();
-    }
-
-    /**
-     * Clean up URL parameters
-     */
-    cleanupUrl() {
-        const newUrl = window.location.origin + window.location.pathname;
-        window.history.replaceState({}, document.title, newUrl);
-    }
-
-    /**
-     * Show error state
-     */
-    showErrorState(message) {
-        const container = document.getElementById('lootboxGrid') || document.body;
-        container.innerHTML = `
+  showError(message) {
+    const appContainer = document.getElementById("app") || document.body;
+    appContainer.innerHTML = `
             <div class="error-state">
                 <h2>Application Error</h2>
                 <p>${message}</p>
-                <button onclick="location.reload()">Reload Application</button>
+                <button data-action="reload" class="btn btn-primary">Reload Application</button>
             </div>
         `;
-    }
-
-    /**
-     * Get application statistics
-     */
-    getStatistics() {
-        return {
-            lootboxes: this.lootboxController.getStatistics(),
-            groupBoxes: this.groupBoxController.getStatistics(),
-            initialized: this.isInitialized,
-            currentView: this.currentView,
-            currentFilter: this.currentFilter
-        };
-    }
+  }
 }
 
-export default App;
+// Create and export single instance
+const app = new App();
+
+// Start initialization when DOM is ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => app.initialize());
+} else {
+  app.initialize();
+}
+
+export default app;
