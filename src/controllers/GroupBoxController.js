@@ -260,11 +260,16 @@ class GroupBoxController {
       };
 
       // Save to user's participated collection
-      const docRef = await this.firebase.db
-        .collection("users")
-        .doc(currentUser.uid)
-        .collection("participated_group_boxes")
-        .add(participantData);
+      const { collection, doc, addDoc } = window.firebaseFunctions;
+      const docRef = await addDoc(
+        collection(
+          this.firebase.db,
+          "users",
+          currentUser.uid,
+          "participated_group_boxes"
+        ),
+        participantData
+      );
 
       participantData.id = docRef.id;
 

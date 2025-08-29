@@ -374,27 +374,113 @@ body {
 }
 
 .modal-header {
-    padding: 25px;
-    border-bottom: 1px solid #e2e8f0;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 30%, #334155 100%);
+    color: #f1f5f9;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-shrink: 0; /* Prevent header from shrinking */
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    backdrop-filter: blur(20px);
+}
+
+.modal-header::before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    right: -30px;
+    width: 80px;
+    height: 80px;
+    background: radial-gradient(circle, rgba(94, 234, 212, 0.15) 0%, rgba(59, 130, 246, 0.1) 40%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-4px) rotate(180deg); }
 }
 
 .modal-title {
-    font-size: 20px;
-    font-weight: 600;
-    color: #2d3748;
+    font-size: 16px;
+    font-weight: 500;
+    color: #f1f5f9;
+    margin: 0;
+    letter-spacing: 0.025em;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .close-btn {
-    background: none;
-    border: none;
-    font-size: 24px;
+    background: rgba(148, 163, 184, 0.1);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    font-size: 16px;
     cursor: pointer;
+    color: #cbd5e1;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    backdrop-filter: blur(10px);
+    line-height: 1;
+    min-width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    transform: scale(1.1);
+}
+
+/* Compact header variant */
+.modal-header.compact {
+    padding: 6px 12px;
+    min-height: 32px;
+}
+
+.modal-header.compact .modal-title {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.modal-header.compact .close-btn {
+    padding: 2px 6px;
+    font-size: 14px;
+    min-width: 20px;
+    height: 20px;
+}
+
+/* Optional: headerless modal support */
+.modal-content.no-header .modal-body {
+    border-radius: 20px 20px 0 0;
+    position: relative;
+}
+
+.modal-content.no-header .modal-body::after {
+    content: '×';
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    width: 24px;
+    height: 24px;
+    background: rgba(148, 163, 184, 0.1);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
     color: #64748b;
-    padding: 5px;
+    transition: all 0.15s ease;
+    z-index: 10;
 }
 
 .modal-body {
