@@ -249,6 +249,14 @@ class App {
         case "set-filter":
           this.controllers.ui.setFilter(data.filter);
           break;
+        // Navigation
+        case "show-list":
+          this.controllers.ui.showListView();
+          break;
+
+        case "set-filter": // Add this case
+          this.controllers.ui.setFilter(data.filter);
+          break;
 
         // Modal actions
         case "close-modal":
