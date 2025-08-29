@@ -183,6 +183,22 @@ class App {
               this.controllers.ui.render();
             }
             this.state.pendingDeleteIndex = undefined;
+          } else if (
+            data.type === "groupbox" &&
+            this.state.pendingDeleteGroupBoxId !== undefined
+          ) {
+            const result = await this.controllers.groupBox.deleteGroupBox(
+              this.state.pendingDeleteGroupBoxId,
+              false // deleteForEveryone = false (just leave the group)
+            );
+            if (result.success) {
+              this.controllers.ui.showToast(
+                `Left "${result.groupBoxName}"`
+              );
+              this.controllers.ui.closeModal("deleteModal");
+              this.controllers.ui.render();
+            }
+            this.state.pendingDeleteGroupBoxId = undefined;
           }
           break;
 
@@ -529,8 +545,10 @@ class App {
     // Show the delete modal directly
     const modal = document.getElementById("deleteModal");
     const nameEl = document.getElementById("deleteLootboxName");
-    if (modal && nameEl) {
+    const deleteBtn = modal?.querySelector('[data-action="confirm-delete"]');
+    if (modal && nameEl && deleteBtn) {
       nameEl.textContent = lootbox.name;
+      deleteBtn.setAttribute('data-type', 'lootbox');
       modal.classList.add("show");
     }
   }
@@ -553,8 +571,10 @@ class App {
       // Show regular delete modal for participants
       const modal = document.getElementById("deleteModal");
       const nameEl = document.getElementById("deleteLootboxName");
-      if (modal && nameEl) {
+      const deleteBtn = modal?.querySelector('[data-action="confirm-delete"]');
+      if (modal && nameEl && deleteBtn) {
         nameEl.textContent = groupBox.groupBoxName;
+        deleteBtn.setAttribute('data-type', 'groupbox');
         modal.classList.add("show");
       }
     }

@@ -161,7 +161,10 @@ class UIController {
       ];
     }
 
-    console.log("Filtered items to render:", allItems);
+    // Sort items: new boxes first (spins/opens = 0), then by recent usage
+    allItems.sort(this.sortItemsByUsage);
+
+    console.log("Sorted items to render:", allItems);
 
     if (allItems.length === 0) {
       grid.style.display = "none";
@@ -796,6 +799,40 @@ class UIController {
         this.showToast(error, "error");
       }
     });
+  }
+
+  // Sorting helper method - pure chronological by most recent activity
+  sortItemsByUsage(a, b) {
+    const aData = a.data;
+    const bData = b.data;
+    
+    // Get the most recent activity timestamp for each item
+    // Priority: lastUsed/lastParticipated > createdAt/importedAt/firstParticipated
+    const aMostRecent = new Date(
+      aData.lastUsed || 
+      aData.lastParticipated || 
+      aData.createdAt || 
+      aData.importedAt || 
+      aData.firstParticipated || 
+      aData.updatedAt || 
+      0
+    );
+    
+    const bMostRecent = new Date(
+      bData.lastUsed || 
+      bData.lastParticipated || 
+      bData.createdAt || 
+      bData.importedAt || 
+      bData.firstParticipated || 
+      bData.updatedAt || 
+      0
+    );
+    
+    // Debug logging
+    console.log(`Chronological sort: ${aData.name || aData.groupBoxName} (${a.type}) mostRecent=${aMostRecent} vs ${bData.name || bData.groupBoxName} (${b.type}) mostRecent=${bMostRecent}`);
+    
+    // Most recent activity first
+    return bMostRecent - aMostRecent;
   }
 
   // Add other UI methods as needed...
