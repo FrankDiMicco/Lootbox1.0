@@ -163,10 +163,10 @@ class GroupBoxCard {
     // Edit button (only for organizer-only mode)
     if (groupBox.isOrganizerOnly) {
       actions.push(`
-                <button class="action-btn" onclick="event.stopPropagation(); app.editGroupBox('${groupBox.groupBoxId}')" title="Edit Group Box">
-                    <img src="assets/graphics/settings_cog.png" alt="Edit" class="action-icon">
-                </button>
-            `);
+            <button class="action-btn" data-action="edit-group-box" data-id="${groupBox.groupBoxId}" title="Edit Group Box">
+                <img src="assets/graphics/settings_cog.png" alt="Edit" class="action-icon">
+            </button>
+        `);
     }
 
     // Favorite button
@@ -175,26 +175,26 @@ class GroupBoxCard {
       : "assets/graphics/empty_favorite_star.png";
 
     actions.push(`
-            <button class="action-btn" onclick="event.stopPropagation(); app.favoriteGroupBox('${groupBox.groupBoxId}')" title="Toggle favorite">
-                <img src="${favoriteIcon}" alt="Favorite" class="action-icon">
-            </button>
-        `);
+        <button class="action-btn" data-action="toggle-group-favorite" data-id="${groupBox.groupBoxId}" title="Toggle favorite">
+            <img src="${favoriteIcon}" alt="Favorite" class="action-icon">
+        </button>
+    `);
 
     // Share button (only for creators)
     if (groupBox.isCreator) {
       actions.push(`
-                <button class="action-btn" onclick="event.stopPropagation(); app.shareGroupBoxLink('${groupBox.groupBoxId}')" title="Share Group Box">
-                    <img src="assets/graphics/share.png" alt="Share" class="action-icon">
-                </button>
-            `);
+            <button class="action-btn" data-action="share-group-box" data-id="${groupBox.groupBoxId}" title="Share Group Box">
+                <img src="assets/graphics/share.png" alt="Share" class="action-icon">
+            </button>
+        `);
     }
 
     // Delete button
     actions.push(`
-            <button class="action-btn" onclick="event.stopPropagation(); app.deleteGroupBox('${groupBox.groupBoxId}')" title="Delete/Leave Group Box">
-                <img src="assets/graphics/delete_x.png" alt="Delete" class="action-icon">
-            </button>
-        `);
+        <button class="action-btn" data-action="delete-group-box" data-id="${groupBox.groupBoxId}" title="Delete/Leave Group Box">
+            <img src="assets/graphics/delete_x.png" alt="Delete" class="action-icon">
+        </button>
+    `);
 
     return actions.join("");
   }
@@ -342,7 +342,7 @@ class GroupBoxCard {
                         ${
                           groupBoxId
                             ? `
-                            <button class="action-btn" onclick="event.stopPropagation(); app.deleteGroupBox('${groupBoxId}')" title="Remove invalid group box">
+                            <button class="action-btn" data-action="delete-group-box" data-id="${groupBoxId}" title="Remove invalid group box">
                                 <img src="assets/graphics/delete_x.png" alt="Delete" class="action-icon">
                             </button>
                         `

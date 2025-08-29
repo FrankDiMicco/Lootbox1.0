@@ -10,102 +10,48 @@ class LootboxController {
 
   async initialize() {
     try {
-      // Test if Lootbox class is imported correctly
-      console.log("Lootbox class:", Lootbox);
-      console.log("Lootbox prototype:", Lootbox.prototype);
+      console.log("Initializing LootboxController...");
 
-      // Test creating a simple Lootbox
-      const testLootbox = new Lootbox({ name: "Test", items: [] });
-      console.log("Test Lootbox:", testLootbox);
-      console.log("Test Lootbox name:", testLootbox.name);
-
-      // Try to load from Firebase first
+      // Only use Firebase if available, otherwise use localStorage
       if (this.firebase.isReady) {
+        console.log("Loading lootboxes from Firebase...");
         const firebaseLootboxes = await this.firebase.loadLootboxes();
-        console.log("Raw Firebase lootbox data:", firebaseLootboxes);
 
-        // Ensure we create Lootbox instances from the data
-        this.lootboxes = firebaseLootboxes.map((data, index) => {
-          console.log(`Processing Firebase lootbox ${index}:`, data);
-
-          // Check if it's already a Lootbox instance
-          if (data instanceof Lootbox) {
-            return data;
-          }
-
-          // Try to create Lootbox directly with object spread to ensure properties are copied
-          const lootbox = Object.assign(new Lootbox(), {
-            id: data.id,
-            name: data.name || "Unnamed Lootbox",
-            items: data.items || [],
-            chestImage: data.chestImage || "chests/chest.png",
-            revealContents:
-              data.revealContents !== undefined ? data.revealContents : true,
-            revealOdds: data.revealOdds !== undefined ? data.revealOdds : true,
-            maxTries: data.maxTries || "unlimited",
-            remainingTries:
-              data.remainingTries !== undefined
-                ? data.remainingTries
-                : data.maxTries || "unlimited",
-            spins: data.spins || 0,
-            lastUsed: data.lastUsed || null,
-            favorite: data.favorite || false,
-            imported: data.imported || false,
-            importedAt: data.importedAt || null,
-            createdAt: data.createdAt || new Date().toISOString(),
-            updatedAt: data.updatedAt || new Date().toISOString(),
-          });
-
-          console.log(`Created Lootbox ${index}:`, lootbox);
-          console.log(`Lootbox ${index} name:`, lootbox.name);
-          console.log(`Lootbox ${index} items:`, lootbox.items);
-          return lootbox;
-        });
-        console.log(`Loaded ${this.lootboxes.length} lootboxes from Firebase`);
-        console.log("Final lootboxes array:", this.lootboxes);
-      }
-
-      // Fall back to local storage if needed
-      if (this.lootboxes.length === 0) {
-        const storageLootboxes = this.storage.loadLootboxes();
-        // Ensure we create Lootbox instances from the data
-        this.lootboxes = storageLootboxes.map((data) => {
-          // Check if it's already a Lootbox instance
+        // Convert to Lootbox instances
+        this.lootboxes = firebaseLootboxes.map((data) => {
           if (data instanceof Lootbox) {
             return data;
           }
           return new Lootbox(data);
         });
+
+        console.log(`Loaded ${this.lootboxes.length} lootboxes from Firebase`);
+
+        // Clear localStorage to prevent duplicates
+        this.storage.remove("lootboxes");
+      } else {
+        console.log("Firebase not available, loading from localStorage...");
+        const storageLootboxes = this.storage.loadLootboxes();
+
+        // Convert to Lootbox instances
+        this.lootboxes = storageLootboxes.map((data) => {
+          if (data instanceof Lootbox) {
+            return data;
+          }
+          return new Lootbox(data);
+        });
+
         console.log(
           `Loaded ${this.lootboxes.length} lootboxes from localStorage`
         );
       }
-
-      // Verify all items are Lootbox instances
-      const allAreLootboxes = this.lootboxes.every(
-        (item) => item instanceof Lootbox
-      );
-      if (!allAreLootboxes) {
-        console.error("Not all items are Lootbox instances!");
-        // Convert any non-Lootbox items
-        this.lootboxes = this.lootboxes.map((item) => {
-          if (item instanceof Lootbox) {
-            return item;
-          }
-          console.warn("Converting non-Lootbox item:", item);
-          return new Lootbox(item);
-        });
-      }
     } catch (error) {
       console.error("Error initializing lootboxes:", error);
-      // Ensure we have an empty array on error
       this.lootboxes = [];
     }
   }
 
   getAllLootboxes() {
-    // Return the actual lootbox instances with all properties
-    console.log("getAllLootboxes returning:", this.lootboxes);
     return this.lootboxes;
   }
 
@@ -122,14 +68,17 @@ class LootboxController {
         return { success: false, errors: validation.errors };
       }
 
-      // Save to Firebase if available
+      // Save to Firebase and get the ID
       if (this.firebase.isReady) {
         const id = await this.firebase.saveLootbox(lootbox.toObject());
         lootbox.id = id;
       }
 
+      // Add to local array
       this.lootboxes.push(lootbox);
-      await this.save();
+
+      // Save to localStorage as backup
+      this.saveToLocalStorage();
 
       return { success: true, lootbox, index: this.lootboxes.length - 1 };
     } catch (error) {
@@ -144,25 +93,30 @@ class LootboxController {
         return { success: false, errors: ["Invalid lootbox index"] };
       }
 
-      const lootbox = new Lootbox({
-        ...this.lootboxes[index].toObject(),
+      const existingLootbox = this.lootboxes[index];
+      const updatedLootbox = new Lootbox({
+        ...existingLootbox.toObject(),
         ...data,
+        id: existingLootbox.id, // Preserve the ID
       });
-      const validation = lootbox.validate();
 
+      const validation = updatedLootbox.validate();
       if (!validation.isValid) {
         return { success: false, errors: validation.errors };
       }
 
-      // Update in Firebase if available
-      if (this.firebase.isReady && lootbox.id) {
-        await this.firebase.saveLootbox(lootbox.toObject());
+      // Update in Firebase if it has an ID
+      if (this.firebase.isReady && updatedLootbox.id) {
+        await this.firebase.saveLootbox(updatedLootbox.toObject());
       }
 
-      this.lootboxes[index] = lootbox;
-      await this.save();
+      // Update local array
+      this.lootboxes[index] = updatedLootbox;
 
-      return { success: true, lootbox };
+      // Save to localStorage as backup
+      this.saveToLocalStorage();
+
+      return { success: true, lootbox: updatedLootbox };
     } catch (error) {
       console.error("Error updating lootbox:", error);
       return { success: false, errors: [error.message] };
@@ -178,13 +132,16 @@ class LootboxController {
       const lootbox = this.lootboxes[index];
       const name = lootbox.name;
 
-      // Delete from Firebase if available
+      // Delete from Firebase if it has an ID
       if (this.firebase.isReady && lootbox.id) {
         await this.firebase.deleteLootbox(lootbox.id);
       }
 
+      // Remove from local array
       this.lootboxes.splice(index, 1);
-      await this.save();
+
+      // Save to localStorage as backup
+      this.saveToLocalStorage();
 
       return { success: true, deletedName: name };
     } catch (error) {
@@ -203,7 +160,14 @@ class LootboxController {
       lootbox.favorite = !lootbox.favorite;
       lootbox.updatedAt = new Date().toISOString();
 
-      await this.save();
+      // Update in Firebase if it has an ID
+      if (this.firebase.isReady && lootbox.id) {
+        await this.firebase.saveLootbox(lootbox.toObject());
+      }
+
+      // Save to localStorage as backup
+      this.saveToLocalStorage();
+
       return { success: true };
     } catch (error) {
       console.error("Error toggling favorite:", error);
@@ -231,9 +195,13 @@ class LootboxController {
       // Record spin in Firebase if available
       if (this.firebase.isReady && lootbox.id) {
         await this.firebase.recordSpin(lootbox.id, result);
+        // Update the lootbox in Firebase with new spin count
+        await this.firebase.saveLootbox(lootbox.toObject());
       }
 
-      await this.save();
+      // Save to localStorage as backup
+      this.saveToLocalStorage();
+
       return { success: true, result };
     } catch (error) {
       console.error("Error spinning lootbox:", error);
@@ -254,13 +222,21 @@ class LootboxController {
       });
 
       const validation = importedLootbox.validate();
-
       if (!validation.isValid) {
         return { success: false, errors: validation.errors };
       }
 
+      // Save to Firebase and get ID
+      if (this.firebase.isReady) {
+        const id = await this.firebase.saveLootbox(importedLootbox.toObject());
+        importedLootbox.id = id;
+      }
+
+      // Add to local array
       this.lootboxes.push(importedLootbox);
-      await this.save();
+
+      // Save to localStorage as backup
+      this.saveToLocalStorage();
 
       return { success: true, message: `Imported "${importedLootbox.name}"` };
     } catch (error) {
@@ -295,22 +271,21 @@ class LootboxController {
     }
   }
 
-  async save() {
+  // Private method to save to localStorage only (not Firebase)
+  saveToLocalStorage() {
     try {
       const data = this.lootboxes.map((lb) => lb.toObject());
       this.storage.saveLootboxes(data);
-
-      // Also save to Firebase if available
-      if (this.firebase.isReady) {
-        for (const lootbox of this.lootboxes) {
-          if (lootbox.id || this.firebase.getCurrentUser()) {
-            await this.firebase.saveLootbox(lootbox.toObject());
-          }
-        }
-      }
     } catch (error) {
-      console.error("Error saving lootboxes:", error);
+      console.error("Error saving to localStorage:", error);
     }
+  }
+
+  // This method is no longer needed - we save to Firebase individually
+  // when creating/updating/deleting
+  async save() {
+    // Just save to localStorage as backup
+    this.saveToLocalStorage();
   }
 }
 

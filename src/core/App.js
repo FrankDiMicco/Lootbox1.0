@@ -187,11 +187,11 @@ class App {
           break;
 
         case "create-lootbox":
-          this.controllers.ui.showCreateModal();
+          await this.controllers.ui.showCreateModal();
           break;
 
         case "edit-lootbox":
-          this.controllers.ui.showEditModal(parseInt(data.index));
+          await this.controllers.ui.showEditModal(parseInt(data.index));
           break;
 
         case "delete-lootbox":
@@ -199,7 +199,76 @@ class App {
           break;
 
         case "share-lootbox":
-          this.controllers.ui.showShareModal(parseInt(data.index));
+          const shareIndex = parseInt(data.index);
+          const shareLootbox = this.controllers.lootbox.getLootbox(shareIndex);
+          if (shareLootbox) {
+            this.state.sharingLootboxIndex = shareIndex;
+            this.state.sharingLootboxCopy = shareLootbox.toObject
+              ? shareLootbox.toObject()
+              : shareLootbox;
+
+            // Show the share modal
+            const modal = document.getElementById("shareModal");
+            const nameEl = document.getElementById("shareLootboxName");
+            if (modal && nameEl) {
+              nameEl.textContent = shareLootbox.name;
+              modal.classList.add("show");
+            }
+          }
+          break;
+
+        case "share-as-lootbox": // ADD THIS
+          if (this.state.sharingLootboxIndex !== undefined) {
+            const result = this.controllers.lootbox.generateShareUrl(
+              this.state.sharingLootboxIndex
+            );
+            if (result.success) {
+              await this.shareUrl(result.url, result.lootboxName);
+              this.controllers.ui.closeModal("shareModal");
+            }
+          }
+          break;
+        case "delete-group-everyone":
+          if (this.state.pendingDeleteGroupBoxId) {
+            const result = await this.controllers.groupBox.deleteGroupBox(
+              this.state.pendingDeleteGroupBoxId,
+              true // deleteForEveryone = true
+            );
+            if (result.success) {
+              this.controllers.ui.showToast(
+                `"${result.groupBoxName}" deleted for everyone`
+              );
+              document
+                .getElementById("creatorDeleteModal")
+                .classList.remove("show");
+              this.controllers.ui.render();
+            }
+            this.state.pendingDeleteGroupBoxId = undefined;
+          }
+          break;
+
+        case "delete-group-me":
+          if (this.state.pendingDeleteGroupBoxId) {
+            const result = await this.controllers.groupBox.deleteGroupBox(
+              this.state.pendingDeleteGroupBoxId,
+              false // deleteForEveryone = false
+            );
+            if (result.success) {
+              this.controllers.ui.showToast(`Left "${result.groupBoxName}"`);
+              document
+                .getElementById("creatorDeleteModal")
+                .classList.remove("show");
+              this.controllers.ui.render();
+            }
+            this.state.pendingDeleteGroupBoxId = undefined;
+          }
+          break;
+        case "share-as-groupbox": // ADD THIS
+          // Show group box creation modal
+          document.getElementById("shareModal").classList.remove("show");
+          document.getElementById("groupBoxModal").classList.add("show");
+          document.getElementById("groupBoxName").value =
+            this.state.sharingLootboxCopy?.name || "";
           break;
 
         case "toggle-favorite":
@@ -249,6 +318,7 @@ class App {
         case "set-filter":
           this.controllers.ui.setFilter(data.filter);
           break;
+
         // Navigation
         case "show-list":
           this.controllers.ui.showListView();
@@ -290,6 +360,25 @@ class App {
 
         case "reload":
           window.location.reload();
+          break;
+
+        // Additional missing actions
+        case "show-menu":
+          console.log("Menu not implemented yet");
+          break;
+
+        case "toggle-session-history":
+          const content = document.getElementById("sessionContent");
+          const button = document.getElementById("toggleButton");
+          if (content && button) {
+            if (content.classList.contains("collapsed")) {
+              content.classList.remove("collapsed");
+              button.textContent = "▼";
+            } else {
+              content.classList.add("collapsed");
+              button.textContent = "▶";
+            }
+          }
           break;
 
         default:
@@ -453,12 +542,21 @@ class App {
     this.state.pendingDeleteGroupBoxId = groupBoxId;
 
     if (groupBox.isCreator) {
-      this.controllers.ui.showCreatorDeleteModal(groupBox);
+      // Show creator delete choice modal
+      const modal = document.getElementById("creatorDeleteModal");
+      const nameEl = document.getElementById("creatorDeleteBoxName");
+      if (modal && nameEl) {
+        nameEl.textContent = groupBox.groupBoxName;
+        modal.classList.add("show");
+      }
     } else {
-      this.controllers.ui.showDeleteConfirmModal(
-        groupBox.groupBoxName,
-        "groupbox"
-      );
+      // Show regular delete modal for participants
+      const modal = document.getElementById("deleteModal");
+      const nameEl = document.getElementById("deleteLootboxName");
+      if (modal && nameEl) {
+        nameEl.textContent = groupBox.groupBoxName;
+        modal.classList.add("show");
+      }
     }
   }
 
@@ -527,6 +625,27 @@ class App {
       console.error("Failed to copy:", error);
       this.controllers.ui.showToast("Failed to copy to clipboard", "error");
     }
+  }
+
+  // Missing methods that are called from the codebase
+  openGroupBoxFromList(groupBoxId) {
+    return this.handleAction("open-group-box", { id: groupBoxId });
+  }
+
+  deleteGroupBox(groupBoxId) {
+    return this.handleAction("delete-group-box", { id: groupBoxId });
+  }
+
+  favoriteGroupBox(groupBoxId) {
+    return this.handleAction("toggle-group-favorite", { id: groupBoxId });
+  }
+
+  shareGroupBoxLink(groupBoxId) {
+    return this.handleAction("share-group-box", { id: groupBoxId });
+  }
+
+  editGroupBox(groupBoxId) {
+    return this.handleAction("edit-group-box", { id: groupBoxId });
   }
 
   showError(message) {

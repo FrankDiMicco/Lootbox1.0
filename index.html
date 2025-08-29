@@ -9,7 +9,7 @@
 <body>
     <div class="header">
         <div class="header-content">
-            <button class="hamburger-menu" onclick="showMenu()">
+            <button class="hamburger-menu" data-action="show-menu">
                 <span></span>
                 <span></span>
                 <span></span>
@@ -58,7 +58,7 @@
 
         <!-- Session History Section -->
         <div id="sessionHistory" class="session-history">
-            <div id="sessionToggle" class="session-toggle" onclick="toggleSessionHistory()">
+            <div id="sessionToggle" class="session-toggle" data-action="toggle-session-history">
                 <h3>Session History</h3>
                 <button id="toggleButton" class="toggle-button">▶</button>
             </div>
@@ -339,23 +339,8 @@
         // Import and initialize the app
         import app from './src/core/App.js';
         
-        // Make app globally available for legacy onclick handlers
+        // Make app globally available for debugging
         window.app = app;
-        
-        // Add legacy function wrappers for backwards compatibility
-        window.createNewLootbox = () => app.handleAction('create-lootbox', {});
-        window.showMenu = () => console.log('Menu not implemented yet');
-        window.toggleSessionHistory = () => {
-            const content = document.getElementById('sessionContent');
-            const button = document.getElementById('toggleButton');
-            if (content.classList.contains('collapsed')) {
-                content.classList.remove('collapsed');
-                button.textContent = '▼';
-            } else {
-                content.classList.add('collapsed');
-                button.textContent = '▶';
-            }
-        };
     </script>
 </body>
 </html>

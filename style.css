@@ -361,7 +361,9 @@ body {
     width: 90%;
     max-width: 500px;
     max-height: 80vh;
-    overflow-y: auto;
+    overflow: hidden; /* Clip children to border-radius */
+    display: flex;
+    flex-direction: column;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
     transform: translateY(50px);
     transition: all 0.3s ease;
@@ -377,6 +379,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-shrink: 0; /* Prevent header from shrinking */
 }
 
 .modal-title {
@@ -396,6 +399,9 @@ body {
 
 .modal-body {
     padding: 25px;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0; /* Allow flex item to shrink below content size */
 }
 
 .form-group {
@@ -579,10 +585,8 @@ body {
     display: flex;
     gap: 10px;
     justify-content: flex-end;
-    position: sticky;
-    bottom: 0;
     background: white;
-    z-index: 10;
+    flex-shrink: 0; /* Prevent footer from shrinking */
 }
 
 .btn {

@@ -431,21 +431,21 @@ class UIController {
   }
 
   // Modal methods
-  showCreateModal() {
+  async showCreateModal() {
     this.state.editingIndex = -1;
     document.getElementById("modalTitle").textContent = "Create New Lootbox";
     document.getElementById("editModal").classList.add("show");
-    this.initializeModalForm();
+    await this.initializeModalForm();
   }
 
-  showEditModal(index) {
+  async showEditModal(index) {
     this.state.editingIndex = index;
     const lootbox = this.lootboxController.getLootbox(index);
     if (!lootbox) return;
 
     document.getElementById("modalTitle").textContent = "Edit Lootbox";
     document.getElementById("editModal").classList.add("show");
-    this.populateModalForm(lootbox);
+    await this.populateModalForm(lootbox);
   }
 
   closeModal(modalId) {
@@ -455,14 +455,347 @@ class UIController {
     }
   }
 
-  initializeModalForm() {
-    // Implementation for initializing empty form
-    console.log("Initialize modal form");
+  async initializeModalForm() {
+    // Clear form
+    document.getElementById("lootboxName").value = "";
+    document.getElementById("revealContents").checked = true;
+    document.getElementById("revealOdds").checked = true;
+    document.getElementById("unlimitedTries").checked = true;
+    document.getElementById("maxTries").value = "10";
+    
+    // Clear items list
+    const itemsList = document.getElementById("itemsList");
+    if (itemsList) {
+      itemsList.innerHTML = "";
+    }
+    
+    // Load and populate chest selection
+    await this.populateChestSelection();
+    
+    // Add initial item row
+    this.addItemRow();
   }
 
-  populateModalForm(lootbox) {
-    // Implementation for populating form with lootbox data
-    console.log("Populate modal form with:", lootbox.name);
+  async populateModalForm(lootbox) {
+    // Populate form with lootbox data
+    document.getElementById("lootboxName").value = lootbox.name || "";
+    document.getElementById("revealContents").checked = lootbox.revealContents !== false;
+    document.getElementById("revealOdds").checked = lootbox.revealOdds !== false;
+    document.getElementById("unlimitedTries").checked = lootbox.maxTries === "unlimited";
+    document.getElementById("maxTries").value = lootbox.maxTries === "unlimited" ? "10" : lootbox.maxTries;
+    
+    // Clear and populate items list
+    const itemsList = document.getElementById("itemsList");
+    if (itemsList) {
+      itemsList.innerHTML = "";
+      if (lootbox.items && lootbox.items.length > 0) {
+        lootbox.items.forEach(item => {
+          this.addItemRow();
+          const lastRow = itemsList.lastElementChild;
+          if (lastRow) {
+            const nameInput = lastRow.querySelector(".item-name");
+            const oddsInput = lastRow.querySelector(".item-odds");
+            if (nameInput) nameInput.value = item.name;
+            if (oddsInput) oddsInput.value = item.odds;
+          }
+        });
+      } else {
+        this.addItemRow();
+      }
+    }
+    
+    // Load and populate chest selection
+    await this.populateChestSelection(lootbox.chestImage);
+    
+    this.updateTotalOdds();
+  }
+
+  async populateChestSelection(selectedChestImage = null) {
+    const chestSelection = document.getElementById("chestSelection");
+    if (!chestSelection) return;
+
+    // Always use a local fallback list of chests since we have the images
+    const defaultChests = [
+      { file: 'chest.png', name: 'Default Chest', description: 'Classic treasure chest' },
+      { file: 'metal.png', name: 'Metal Chest', description: 'Sturdy metal chest' },
+      { file: 'skull_bone.png', name: 'Skull Chest', description: 'Spooky bone chest' },
+      { file: 'wood_flower.png', name: 'Flower Chest', description: 'Wooden chest with flowers' },
+      { file: 'kid_happy.png', name: 'Happy Kid Chest', description: 'Cheerful kid-themed chest' },
+      { file: 'fruit_wood.png', name: 'Fruity Chest', description: 'Chest with fruit' },
+      { file: 'weapon_wood.png', name: 'Weapon Chest', description: 'Wooden chest with weapons' },
+      { file: 'orb_chest.png', name: 'Orb Chest', description: 'Chest with orbs' }
+    ];
+
+    let chests = defaultChests;
+
+    try {
+      // Try to get chests from Firebase, but use fallback if it fails
+      const firebase = this.lootboxController.firebase;
+      console.log("Firebase ready status:", firebase.isReady);
+      
+      if (firebase.isReady) {
+        const firebaseChests = await firebase.loadAvailableChests();
+        console.log("Loaded chests from Firebase:", firebaseChests);
+        if (firebaseChests && firebaseChests.length > 0) {
+          chests = firebaseChests;
+        }
+      }
+    } catch (error) {
+      console.error("Error loading chests from Firebase, using defaults:", error);
+    }
+
+    console.log("Final chests to display:", chests);
+    
+    // Clear existing content
+    chestSelection.innerHTML = "";
+    
+    // Create chest options
+    chests.forEach(chest => {
+      const chestPath = `chests/${chest.file}`;
+      const isSelected = selectedChestImage === chestPath || 
+                        (selectedChestImage === null && chest.file === 'chest.png');
+      
+      const chestOption = document.createElement("div");
+      chestOption.className = `chest-option${isSelected ? " selected" : ""}`;
+      chestOption.dataset.image = chestPath;
+      chestOption.innerHTML = `
+        <img src="${chestPath}" alt="${chest.name}" onerror="console.error('Failed to load image: ${chestPath}')">
+        <span>${chest.name}</span>
+      `;
+      
+      // Add click handler
+      chestOption.addEventListener("click", () => {
+        // Remove selected class from all options
+        document.querySelectorAll(".chest-option").forEach(opt => {
+          opt.classList.remove("selected");
+        });
+        // Add selected class to clicked option
+        chestOption.classList.add("selected");
+      });
+      
+      chestSelection.appendChild(chestOption);
+    });
+  }
+
+  // Modal management methods
+  showDeleteConfirmModal() {
+    const modal = document.getElementById("deleteModal");
+    if (modal) {
+      modal.classList.add("show");
+    }
+  }
+
+  showCreatorDeleteModal() {
+    const modal = document.getElementById("creatorDeleteModal");
+    if (modal) {
+      modal.classList.add("show");
+    }
+  }
+
+  showShareModal() {
+    const modal = document.getElementById("shareModal");
+    if (modal) {
+      modal.classList.add("show");
+    }
+  }
+
+  showGroupBoxShareModal(groupBoxId) {
+    const modal = document.getElementById("shareModal");
+    if (modal) {
+      modal.classList.add("show");
+    }
+  }
+
+  showEditGroupBoxModal(groupBoxId) {
+    const modal = document.getElementById("groupBoxEditModal");
+    if (modal) {
+      modal.classList.add("show");
+    }
+  }
+
+  closeDeleteModals() {
+    const deleteModal = document.getElementById("deleteModal");
+    const creatorDeleteModal = document.getElementById("creatorDeleteModal");
+    if (deleteModal) deleteModal.classList.remove("show");
+    if (creatorDeleteModal) creatorDeleteModal.classList.remove("show");
+  }
+
+  // Form management methods
+  addItemRow() {
+    const itemsList = document.getElementById("itemsList");
+    if (!itemsList) return;
+
+    const itemIndex = itemsList.children.length;
+    const itemRow = document.createElement("div");
+    itemRow.className = "item-row";
+    itemRow.innerHTML = `
+      <input type="text" class="form-input item-name" placeholder="Item name">
+      <input type="number" class="form-input item-odds" placeholder="0.000" min="0" max="1" step="0.001">
+      <button class="remove-item-btn" data-action="remove-item" data-index="${itemIndex}">×</button>
+    `;
+    itemsList.appendChild(itemRow);
+    this.updateTotalOdds();
+  }
+
+  removeItemRow(index) {
+    const itemsList = document.getElementById("itemsList");
+    if (!itemsList || !itemsList.children[index]) return;
+
+    itemsList.removeChild(itemsList.children[index]);
+    
+    // Update indices for remaining items
+    Array.from(itemsList.children).forEach((row, idx) => {
+      const removeBtn = row.querySelector('[data-action="remove-item"]');
+      if (removeBtn) {
+        removeBtn.dataset.index = idx;
+      }
+    });
+    
+    this.updateTotalOdds();
+  }
+
+  distributeOddsEvenly() {
+    const itemsList = document.getElementById("itemsList");
+    if (!itemsList) return;
+
+    const oddsInputs = itemsList.querySelectorAll(".item-odds");
+    if (oddsInputs.length === 0) return;
+
+    const evenOdds = (1 / oddsInputs.length).toFixed(3);
+    oddsInputs.forEach(input => {
+      input.value = evenOdds;
+    });
+    
+    this.updateTotalOdds();
+  }
+
+  randomizeOdds() {
+    const itemsList = document.getElementById("itemsList");
+    if (!itemsList) return;
+
+    const oddsInputs = itemsList.querySelectorAll(".item-odds");
+    if (oddsInputs.length === 0) return;
+
+    // Generate random weights
+    const weights = Array.from({length: oddsInputs.length}, () => Math.random());
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+
+    // Normalize to sum to 1
+    weights.forEach((weight, index) => {
+      const normalizedOdds = (weight / totalWeight).toFixed(3);
+      oddsInputs[index].value = normalizedOdds;
+    });
+    
+    this.updateTotalOdds();
+  }
+
+  updateTotalOdds() {
+    const itemsList = document.getElementById("itemsList");
+    const totalOddsEl = document.getElementById("totalOdds");
+    if (!itemsList || !totalOddsEl) return;
+
+    const oddsInputs = itemsList.querySelectorAll(".item-odds");
+    let total = 0;
+    
+    oddsInputs.forEach(input => {
+      const value = parseFloat(input.value) || 0;
+      total += value;
+    });
+    
+    totalOddsEl.textContent = total.toFixed(3);
+    
+    // Update styling based on whether total is close to 1
+    const isValid = Math.abs(total - 1) < 0.001;
+    totalOddsEl.style.color = isValid ? "#10b981" : "#ef4444";
+  }
+
+  collectLootboxFormData(formData) {
+    const name = document.getElementById("lootboxName")?.value || "";
+    const revealContents = document.getElementById("revealContents")?.checked || false;
+    const revealOdds = document.getElementById("revealOdds")?.checked || false;
+    const unlimitedTries = document.getElementById("unlimitedTries")?.checked || false;
+    const maxTries = unlimitedTries ? "unlimited" : parseInt(document.getElementById("maxTries")?.value) || 10;
+    
+    // Get selected chest image
+    const selectedChest = document.querySelector(".chest-option.selected");
+    const chestImage = selectedChest?.dataset.image || "chests/chest.png";
+    
+    // Collect items
+    const itemsList = document.getElementById("itemsList");
+    const items = [];
+    if (itemsList) {
+      const itemRows = itemsList.querySelectorAll(".item-row");
+      itemRows.forEach(row => {
+        const name = row.querySelector(".item-name")?.value;
+        const odds = parseFloat(row.querySelector(".item-odds")?.value) || 0;
+        if (name && odds > 0) {
+          items.push({ name: name.trim(), odds });
+        }
+      });
+    }
+    
+    return {
+      name: name.trim(),
+      items,
+      chestImage,
+      revealContents,
+      revealOdds,
+      maxTries,
+      remainingTries: maxTries,
+      spins: 0,
+      lastUsed: null,
+      favorite: false,
+      imported: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  collectGroupBoxFormData(formData) {
+    const groupBoxName = document.getElementById("groupBoxName")?.value || "";
+    const triesPerPerson = parseInt(document.getElementById("triesPerPerson")?.value) || 3;
+    const unlimitedGroupTries = document.getElementById("unlimitedGroupTries")?.checked || false;
+    const expiresIn = document.getElementById("expiresIn")?.value || "24";
+    const creatorParticipates = document.getElementById("creatorParticipates")?.checked || false;
+    const hideContents = document.getElementById("hideContents")?.checked || false;
+    const hideOdds = document.getElementById("hideOdds")?.checked || false;
+    
+    return {
+      groupBoxName: groupBoxName.trim(),
+      triesPerPerson: unlimitedGroupTries ? "unlimited" : triesPerPerson,
+      unlimitedGroupTries,
+      expiresIn,
+      creatorParticipates,
+      hideContents,
+      hideOdds
+    };
+  }
+
+  showFormErrors(errors) {
+    // Clear previous errors
+    document.querySelectorAll(".error-message").forEach(el => {
+      el.classList.add("hidden");
+    });
+    
+    // Show new errors
+    errors.forEach(error => {
+      if (error.includes("name")) {
+        const nameError = document.getElementById("nameError");
+        if (nameError) {
+          nameError.textContent = error;
+          nameError.classList.remove("hidden");
+        }
+      } else if (error.includes("items")) {
+        const itemsError = document.getElementById("itemsError");
+        if (itemsError) {
+          itemsError.textContent = error;
+          itemsError.classList.remove("hidden");
+        }
+      } else {
+        // Show general error as toast
+        this.showToast(error, "error");
+      }
+    });
   }
 
   // Add other UI methods as needed...

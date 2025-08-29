@@ -361,14 +361,16 @@ class GroupBoxController {
 
       if (deleteForEveryone && groupBox.isCreator) {
         // Delete the group box from Firebase (for everyone)
-        await this.firebase.deleteDoc(
-          this.firebase.doc(this.firebase.db, "group_boxes", groupBoxId)
+        const { deleteDoc, doc } = window.firebaseFunctions;
+        await deleteDoc(
+          doc(this.firebase.db, "group_boxes", groupBoxId)
         );
       } else {
         // Just remove from user's participated collection
         if (groupBox.id) {
-          await this.firebase.deleteDoc(
-            this.firebase.doc(
+          const { deleteDoc, doc } = window.firebaseFunctions;
+          await deleteDoc(
+            doc(
               this.firebase.db,
               "users",
               currentUser.uid,
