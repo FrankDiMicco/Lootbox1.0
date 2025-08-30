@@ -1,5 +1,6 @@
 // src/controllers/LootboxController.js
 import Lootbox from "../models/Lootbox.js";
+import ChestImageHelper from "../services/ChestImageHelper.js";
 
 class LootboxController {
   constructor(firebaseService, storageService) {
@@ -11,12 +12,10 @@ class LootboxController {
   async initialize() {
     try {
       console.log("Initializing LootboxController...");
-
       // Only use Firebase if available, otherwise use localStorage
       if (this.firebase.isReady) {
         console.log("Loading lootboxes from Firebase...");
         const firebaseLootboxes = await this.firebase.loadLootboxes();
-
         // Convert to Lootbox instances
         this.lootboxes = firebaseLootboxes.map((data) => {
           if (data instanceof Lootbox) {
@@ -24,15 +23,12 @@ class LootboxController {
           }
           return new Lootbox(data);
         });
-
         console.log(`Loaded ${this.lootboxes.length} lootboxes from Firebase`);
-
         // Clear localStorage to prevent duplicates
         this.storage.remove("lootboxes");
       } else {
         console.log("Firebase not available, loading from localStorage...");
         const storageLootboxes = this.storage.loadLootboxes();
-
         // Convert to Lootbox instances
         this.lootboxes = storageLootboxes.map((data) => {
           if (data instanceof Lootbox) {
@@ -40,10 +36,18 @@ class LootboxController {
           }
           return new Lootbox(data);
         });
-
         console.log(
           `Loaded ${this.lootboxes.length} lootboxes from localStorage`
         );
+      }
+
+      // Fix chest paths - THIS GOES HERE, INSIDE THE TRY BLOCK
+      const fixedCount = await ChestImageHelper.fixAllChestPaths(
+        this.lootboxes
+      );
+      if (fixedCount > 0) {
+        console.log(`Fixed ${fixedCount} chest image paths`);
+        await this.save();
       }
     } catch (error) {
       console.error("Error initializing lootboxes:", error);

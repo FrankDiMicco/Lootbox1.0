@@ -215,6 +215,7 @@ class App {
           break;
 
         case "share-lootbox":
+          // This keeps the modal for regular lootboxes
           const shareIndex = parseInt(data.index);
           const shareLootbox = this.controllers.lootbox.getLootbox(shareIndex);
           if (shareLootbox) {
@@ -223,7 +224,7 @@ class App {
               ? shareLootbox.toObject()
               : shareLootbox;
 
-            // Show the share modal
+            // Show the modal for choosing share type
             const modal = document.getElementById("shareModal");
             const nameEl = document.getElementById("shareLootboxName");
             if (modal && nameEl) {
@@ -314,7 +315,19 @@ class App {
           break;
 
         case "share-group-box":
-          this.controllers.ui.showGroupBoxShareModal(data.id);
+          // This is for sharing an already-created group box
+          const groupBoxId = data.id;
+          const shareResult =
+            this.controllers.groupBox.generateGroupBoxShareUrl(groupBoxId);
+
+          if (shareResult.success) {
+            await this.shareUrl(shareResult.url, shareResult.groupBoxName);
+          } else {
+            this.controllers.ui.showToast(
+              "Failed to generate share link",
+              "error"
+            );
+          }
           break;
 
         case "toggle-group-favorite":

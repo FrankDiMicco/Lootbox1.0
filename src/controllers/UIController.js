@@ -283,6 +283,18 @@ class UIController {
       this.state.historyRefreshTimer = null;
     }
 
+    // Clear any stuck result popup
+    const popup = document.getElementById("resultPopup");
+    if (popup) {
+      popup.classList.remove("show");
+    }
+
+    // Clear popup timeout if it exists
+    if (this.state.popupTimeout) {
+      clearTimeout(this.state.popupTimeout);
+      this.state.popupTimeout = null;
+    }
+
     this.state.currentView = "list";
     this.state.currentLootbox = null;
     this.render();
@@ -294,7 +306,7 @@ class UIController {
     if (lootbox) {
       // Mark the lootbox as viewed to remove the "NEW" badge
       await this.lootboxController.markAsViewed(index);
-      
+
       this.state.currentView = "lootbox";
       this.state.currentLootbox = lootbox;
       this.state.currentLootboxIndex = index;
