@@ -14,6 +14,7 @@ class Lootbox {
     this.remainingTries =
       data.remainingTries !== undefined ? data.remainingTries : "unlimited"; // Default to unlimited for regular lootboxes
     this.spins = data.spins || 0;
+    this.viewed = data.viewed || false;
     this.lastUsed = data.lastUsed || null;
     this.favorite = data.favorite || false;
     this.imported = data.imported || false;
@@ -131,6 +132,7 @@ class Lootbox {
       maxTries: this.maxTries,
       remainingTries: this.remainingTries,
       spins: this.spins,
+      viewed: this.viewed,
       lastUsed: this.lastUsed,
       favorite: this.favorite,
       imported: this.imported,

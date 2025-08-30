@@ -56,6 +56,7 @@ class LootboxCard {
     // Ensure we have required properties
     const name = lootbox.name || "Unnamed Lootbox";
     const spins = lootbox.spins || 0;
+    const viewed = lootbox.viewed || false;
     const lastUsed = lootbox.lastUsed || null;
     const favorite = lootbox.favorite || false;
 
@@ -67,13 +68,13 @@ class LootboxCard {
       ? "assets/graphics/favorite_star.png"
       : "assets/graphics/empty_favorite_star.png";
 
-    // Check if this is a new lootbox (never spun)
-    const isNewBox = spins === 0;
+    // Check if this is a new lootbox (never opened and never viewed)
+    const isNewBox = spins === 0 && !viewed;
 
     // Generate stats display
     let statsHTML = "";
-    if (isNewBox) {
-      // For new boxes, show that they're new
+    if (spins === 0) {
+      // For boxes that have never been spun
       statsHTML = "<span>Never opened</span>";
     } else {
       // For used boxes, show stats

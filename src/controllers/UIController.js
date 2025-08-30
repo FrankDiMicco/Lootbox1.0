@@ -292,6 +292,9 @@ class UIController {
     console.log("Opening lootbox at index:", index);
     const lootbox = this.lootboxController.getLootbox(index);
     if (lootbox) {
+      // Mark the lootbox as viewed to remove the "NEW" badge
+      await this.lootboxController.markAsViewed(index);
+      
       this.state.currentView = "lootbox";
       this.state.currentLootbox = lootbox;
       this.state.currentLootboxIndex = index;

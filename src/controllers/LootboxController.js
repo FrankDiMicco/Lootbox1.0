@@ -51,6 +51,27 @@ class LootboxController {
     }
   }
 
+  async syncLocalToFirebase() {
+    if (!this.firebase.isReady) return;
+
+    const localBoxes = this.storage.loadLootboxes();
+    const firebaseBoxes = await this.firebase.loadLootboxes();
+
+    // Find boxes that exist locally but not in Firebase
+    const firebaseIds = new Set(
+      firebaseBoxes.map((b) => b.id).filter((id) => id)
+    );
+
+    for (const localBox of localBoxes) {
+      if (!localBox.id || !firebaseIds.has(localBox.id)) {
+        // This box doesn't exist in Firebase - upload it
+        const id = await this.firebase.saveLootbox(localBox);
+        localBox.id = id;
+        console.log(`Synced local box "${localBox.name}" to Firebase`);
+      }
+    }
+  }
+
   getAllLootboxes() {
     return this.lootboxes;
   }
@@ -242,6 +263,35 @@ class LootboxController {
     } catch (error) {
       console.error("Error importing lootbox:", error);
       return { success: false, errors: [error.message] };
+    }
+  }
+
+  async markAsViewed(index) {
+    try {
+      if (index < 0 || index >= this.lootboxes.length) {
+        return { success: false };
+      }
+
+      const lootbox = this.lootboxes[index];
+
+      // Only mark as viewed if it hasn't been viewed yet
+      if (!lootbox.viewed) {
+        lootbox.viewed = true;
+        lootbox.updatedAt = new Date().toISOString();
+
+        // Save to Firebase if available
+        if (this.firebase.isReady) {
+          await this.firebase.saveLootbox(lootbox.toObject());
+        } else {
+          // Save to localStorage
+          this.saveToLocalStorage();
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error marking lootbox as viewed:", error);
+      return { success: false };
     }
   }
 
