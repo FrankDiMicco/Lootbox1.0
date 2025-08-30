@@ -804,6 +804,286 @@ class UIController {
     });
   }
 
+  async showEditGroupBoxModal(groupBoxId) {
+    console.log("showEditGroupBoxModal called with:", groupBoxId);
+
+    const groupBox = this.groupBoxController.getGroupBox(groupBoxId);
+    if (!groupBox || !groupBox.isCreator) {
+      console.log("Not authorized to edit this group box");
+      return;
+    }
+
+    // THIS IS THE CRITICAL LINE - SET THE STATE
+    this.state.currentEditGroupBoxId = groupBoxId;
+    console.log(
+      "Set currentEditGroupBoxId to:",
+      this.state.currentEditGroupBoxId
+    );
+
+    // Set the group box name
+    const nameEl = document.getElementById("editGroupBoxName");
+    if (nameEl) {
+      nameEl.textContent = groupBox.groupBoxName;
+    }
+
+    // Populate items
+    this.populateGroupBoxItems(groupBox);
+
+    // Load and populate participants
+    await this.loadGroupBoxParticipants(groupBoxId);
+
+    // Show modal
+    const modal = document.getElementById("groupBoxEditModal");
+    if (modal) {
+      modal.classList.add("show");
+    }
+  }
+
+  populateGroupBoxItems(groupBox) {
+    const itemsList = document.getElementById("editItemsList");
+    if (!itemsList) return;
+
+    const items = groupBox.lootboxData?.items || groupBox.items || [];
+
+    itemsList.innerHTML = "";
+
+    items.forEach((item, index) => {
+      const itemRow = document.createElement("div");
+      itemRow.className = "edit-item-row";
+      itemRow.innerHTML = `
+            <input type="text" class="edit-item-name-input" value="${this.escapeHtml(
+              item.name
+            )}" data-index="${index}">
+            <input type="number" class="edit-item-odds-input" value="${
+              item.odds
+            }" min="0" max="1" step="0.001" data-index="${index}">
+            <button class="delete-item-btn" data-action="delete-edit-item" data-index="${index}">×</button>
+        `;
+      itemsList.appendChild(itemRow);
+    });
+
+    // Add event listeners for odds changes
+    itemsList.querySelectorAll(".edit-item-odds-input").forEach((input) => {
+      input.addEventListener("input", () => this.updateEditTotalOdds());
+    });
+
+    this.updateEditTotalOdds();
+  }
+
+  async loadGroupBoxParticipants(groupBoxId) {
+    const usersList = document.getElementById("editUsersList");
+    if (!usersList) return;
+
+    usersList.innerHTML = '<div class="loading">Loading participants...</div>';
+
+    try {
+      if (!this.lootboxController.firebase.isReady) {
+        usersList.innerHTML =
+          '<div class="no-participants">Firebase not available</div>';
+        return;
+      }
+
+      // For now, show placeholder since full participant management needs more setup
+      usersList.innerHTML = `
+            <div class="edit-user-row">
+                <div class="edit-user-info">
+                    <div class="edit-user-name">Participant management coming soon</div>
+                    <div class="edit-user-stats">
+                        <span>This feature requires additional Firebase setup</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+      console.error("Error loading participants:", error);
+      usersList.innerHTML =
+        '<div class="no-participants">Error loading participants</div>';
+    }
+  }
+
+  addEditItem() {
+    const itemsList = document.getElementById("editItemsList");
+    if (!itemsList) return;
+
+    const itemRow = document.createElement("div");
+    itemRow.className = "edit-item-row";
+    const newIndex = itemsList.children.length;
+
+    itemRow.innerHTML = `
+        <input type="text" class="edit-item-name-input" placeholder="New item" data-index="${newIndex}">
+        <input type="number" class="edit-item-odds-input" placeholder="0.000" min="0" max="1" step="0.001" value="0" data-index="${newIndex}">
+        <button class="delete-item-btn" data-action="delete-edit-item" data-index="${newIndex}">×</button>
+    `;
+
+    itemsList.appendChild(itemRow);
+
+    // Add event listener for the new odds input
+    itemRow
+      .querySelector(".edit-item-odds-input")
+      .addEventListener("input", () => {
+        this.updateEditTotalOdds();
+      });
+
+    this.updateEditTotalOdds();
+  }
+
+  deleteEditItem(index) {
+    const itemsList = document.getElementById("editItemsList");
+    if (!itemsList) return;
+
+    const rows = itemsList.querySelectorAll(".edit-item-row");
+    if (rows[index]) {
+      rows[index].remove();
+
+      // Re-index remaining items
+      itemsList.querySelectorAll(".edit-item-row").forEach((row, idx) => {
+        row.querySelectorAll("[data-index]").forEach((el) => {
+          el.dataset.index = idx;
+        });
+      });
+
+      this.updateEditTotalOdds();
+    }
+  }
+
+  evenEditOdds() {
+    const itemsList = document.getElementById("editItemsList");
+    if (!itemsList) return;
+
+    const oddsInputs = itemsList.querySelectorAll(".edit-item-odds-input");
+    if (oddsInputs.length === 0) return;
+
+    const evenOdds = (1 / oddsInputs.length).toFixed(3);
+    oddsInputs.forEach((input) => {
+      input.value = evenOdds;
+    });
+
+    this.updateEditTotalOdds();
+  }
+
+  randomizeEditOdds() {
+    const itemsList = document.getElementById("editItemsList");
+    if (!itemsList) return;
+
+    const oddsInputs = itemsList.querySelectorAll(".edit-item-odds-input");
+    if (oddsInputs.length === 0) return;
+
+    // Generate random weights
+    const weights = Array.from({ length: oddsInputs.length }, () =>
+      Math.random()
+    );
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+
+    // Normalize to sum to 1
+    weights.forEach((weight, index) => {
+      const normalizedOdds = (weight / totalWeight).toFixed(3);
+      oddsInputs[index].value = normalizedOdds;
+    });
+
+    this.updateEditTotalOdds();
+  }
+
+  updateEditTotalOdds() {
+    const itemsList = document.getElementById("editItemsList");
+    const totalOddsEl = document.getElementById("editTotalOdds");
+    if (!itemsList || !totalOddsEl) return;
+
+    const oddsInputs = itemsList.querySelectorAll(".edit-item-odds-input");
+    let total = 0;
+
+    oddsInputs.forEach((input) => {
+      const value = parseFloat(input.value) || 0;
+      total += value;
+    });
+
+    totalOddsEl.textContent = total.toFixed(3);
+    totalOddsEl.style.color =
+      Math.abs(total - 1) < 0.001 ? "#10b981" : "#ef4444";
+  }
+
+  async saveGroupBoxChanges() {
+    console.log("saveGroupBoxChanges called");
+
+    const groupBoxId = this.state.currentEditGroupBoxId;
+    console.log("currentEditGroupBoxId:", groupBoxId);
+
+    if (!groupBoxId) {
+      console.log("No groupBoxId found");
+      this.showToast("No group box ID found", "error");
+      return;
+    }
+
+    const groupBox = this.groupBoxController.getGroupBox(groupBoxId);
+    console.log("Found groupBox:", groupBox);
+
+    if (!groupBox) {
+      console.log("GroupBox not found");
+      this.showToast("Group box not found", "error");
+      return;
+    }
+
+    // Collect updated items
+    const itemsList = document.getElementById("editItemsList");
+    const items = [];
+
+    itemsList.querySelectorAll(".edit-item-row").forEach((row) => {
+      const nameInput = row.querySelector(".edit-item-name-input");
+      const oddsInput = row.querySelector(".edit-item-odds-input");
+
+      if (nameInput && oddsInput && nameInput.value.trim()) {
+        items.push({
+          name: nameInput.value.trim(),
+          odds: parseFloat(oddsInput.value) || 0,
+        });
+      }
+    });
+
+    console.log("Collected items:", items);
+
+    // Validate odds sum to ~1
+    const totalOdds = items.reduce((sum, item) => sum + item.odds, 0);
+    console.log("Total odds:", totalOdds);
+
+    if (Math.abs(totalOdds - 1) > 0.001) {
+      this.showToast("Item odds must sum to 100%", "error");
+      return;
+    }
+
+    // Update the group box
+    try {
+      // Update local copy
+      groupBox.items = items;
+      groupBox.lootboxData.items = items;
+
+      console.log("Saving to Firebase...");
+
+      // Save to Firebase
+      if (this.lootboxController.firebase.isReady) {
+        const { updateDoc, doc } = window.firebaseFunctions;
+        await updateDoc(
+          doc(this.lootboxController.firebase.db, "group_boxes", groupBoxId),
+          {
+            "lootboxData.items": items,
+            updatedAt: new Date().toISOString(),
+          }
+        );
+        console.log("Firebase update successful");
+      }
+
+      this.showToast("Group box updated successfully");
+      this.closeModal("groupBoxEditModal");
+      this.render(); // Refresh the view
+    } catch (error) {
+      console.error("Error saving group box changes:", error);
+      this.showToast("Failed to save changes", "error");
+    }
+  }
+
+  escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
   // Modal management methods
   showDeleteConfirmModal() {
     const modal = document.getElementById("deleteModal");
@@ -828,13 +1108,6 @@ class UIController {
 
   showGroupBoxShareModal(groupBoxId) {
     const modal = document.getElementById("shareModal");
-    if (modal) {
-      modal.classList.add("show");
-    }
-  }
-
-  showEditGroupBoxModal(groupBoxId) {
-    const modal = document.getElementById("groupBoxEditModal");
     if (modal) {
       modal.classList.add("show");
     }

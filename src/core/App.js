@@ -336,7 +336,9 @@ class App {
           break;
 
         case "edit-group-box":
-          this.controllers.ui.showEditGroupBoxModal(data.id);
+          console.log("About to call showEditGroupBoxModal with:", data.id);
+          await this.controllers.ui.showEditGroupBoxModal(data.id);
+          console.log("After calling showEditGroupBoxModal");
           break;
 
         // Navigation
@@ -394,6 +396,27 @@ class App {
         // Additional missing actions
         case "show-menu":
           console.log("Menu not implemented yet");
+          break;
+
+        case "add-edit-item":
+          this.controllers.ui.addEditItem();
+          break;
+
+        case "delete-edit-item":
+          this.controllers.ui.deleteEditItem(parseInt(data.index));
+          break;
+
+        case "even-edit-odds":
+          this.controllers.ui.evenEditOdds();
+          break;
+
+        case "save-group-changes":
+          console.log("Calling saveGroupBoxChanges...");
+          await this.controllers.ui.saveGroupBoxChanges();
+          break;
+
+        case "random-edit-odds":
+          this.controllers.ui.randomizeEditOdds();
           break;
 
         case "toggle-session-history":
