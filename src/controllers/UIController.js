@@ -644,8 +644,8 @@ class UIController {
     // Load and populate chest selection
     await this.populateChestSelection();
 
-    // Add initial item row
-    this.addItemRow();
+    // Add initial item row with default values
+    this.addItemRow("Default Item", "1");
   }
 
   async populateModalForm(lootbox) {
@@ -833,7 +833,7 @@ class UIController {
   }
 
   // Form management methods
-  addItemRow() {
+  addItemRow(defaultName = "", defaultOdds = "") {
     const itemsList = document.getElementById("itemsList");
     if (!itemsList) return;
 
@@ -841,8 +841,8 @@ class UIController {
     const itemRow = document.createElement("div");
     itemRow.className = "item-row";
     itemRow.innerHTML = `
-      <input type="text" class="form-input item-name" placeholder="Item name">
-      <input type="number" class="form-input item-odds" placeholder="0.000" min="0" max="1" step="0.001">
+      <input type="text" class="form-input item-name" placeholder="Item name" value="${defaultName}">
+      <input type="number" class="form-input item-odds" placeholder="0.000" min="0" max="1" step="0.001" value="${defaultOdds}">
       <button class="remove-item-btn" data-action="remove-item" data-index="${itemIndex}">×</button>
     `;
     itemsList.appendChild(itemRow);
