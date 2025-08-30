@@ -277,6 +277,12 @@ class UIController {
   }
 
   showListView() {
+    // Clean up any group box history refresh timer
+    if (this.state.historyRefreshTimer) {
+      clearInterval(this.state.historyRefreshTimer);
+      this.state.historyRefreshTimer = null;
+    }
+
     this.state.currentView = "list";
     this.state.currentLootbox = null;
     this.render();
@@ -298,14 +304,128 @@ class UIController {
   async openGroupBox(groupBoxId) {
     console.log("Opening group box:", groupBoxId);
     const groupBox = this.groupBoxController.getGroupBox(groupBoxId);
+    if (!groupBox) {
+      // Try to check if it still exists in Firebase
+      try {
+        await this.lootboxController.firebase.loadGroupBox(groupBoxId);
+      } catch (error) {
+        this.showToast("This group box was deleted by the creator", "error");
+        this.showListView();
+        return;
+      }
+    }
     if (groupBox) {
       this.state.currentView = "lootbox";
       this.state.currentLootbox = groupBox;
       this.state.currentGroupBoxId = groupBoxId;
       this.state.isOrganizerReadonly = groupBox.isOrganizerOnly;
+
+      // Always load fresh history from Firebase for group boxes
+      if (this.lootboxController.firebase.isReady) {
+        try {
+          // Get the complete history from Firebase
+          const sharedHistory =
+            await this.lootboxController.firebase.getSessionHistory(groupBoxId);
+
+          // Format properly
+          const formattedHistory = sharedHistory.map((event) => ({
+            ...event,
+            timestamp:
+              event.timestamp instanceof Date
+                ? event.timestamp.toISOString()
+                : event.timestamp,
+          }));
+
+          // Set as the authoritative history
+          this.state.groupBoxHistories.set(groupBoxId, formattedHistory);
+          this.state.communityHistory = formattedHistory;
+
+          console.log(
+            `Loaded ${formattedHistory.length} events from Firebase for group box ${groupBoxId}`
+          );
+        } catch (error) {
+          console.error("Error loading shared session history:", error);
+          // Fall back to empty history
+          this.state.groupBoxHistories.set(groupBoxId, []);
+          this.state.communityHistory = [];
+        }
+      } else {
+        // No Firebase - use empty history
+        this.state.groupBoxHistories.set(groupBoxId, []);
+        this.state.communityHistory = [];
+      }
+
+      // Set up periodic refresh of session history for group boxes to see other users' activity
+      this.setupGroupBoxHistoryRefresh(groupBoxId);
+
       this.render();
     } else {
       console.error("Group box not found:", groupBoxId);
+    }
+  }
+
+  setupGroupBoxHistoryRefresh(groupBoxId) {
+    // Clear any existing refresh timer
+    if (this.state.historyRefreshTimer) {
+      clearInterval(this.state.historyRefreshTimer);
+    }
+
+    // Only set up refresh if Firebase is ready and we're viewing a group box
+    if (
+      this.lootboxController.firebase.isReady &&
+      this.state.currentLootbox?.isGroupBox
+    ) {
+      this.state.historyRefreshTimer = setInterval(async () => {
+        // Only refresh if we're still viewing the same group box
+        if (
+          this.state.currentLootbox?.isGroupBox &&
+          this.state.currentGroupBoxId === groupBoxId
+        ) {
+          try {
+            await this.refreshGroupBoxHistory(groupBoxId);
+          } catch (error) {
+            console.error("Error refreshing group box history:", error);
+          }
+        } else {
+          // Clear timer if we're no longer viewing this group box
+          if (this.state.historyRefreshTimer) {
+            clearInterval(this.state.historyRefreshTimer);
+            this.state.historyRefreshTimer = null;
+          }
+        }
+      }, 15000); // Refresh every 15 seconds for better responsiveness
+    }
+  }
+
+  async refreshGroupBoxHistory(groupBoxId) {
+    if (!this.lootboxController.firebase.isReady) return;
+
+    try {
+      // Get the complete history from Firebase - this is the source of truth
+      const sharedHistory =
+        await this.lootboxController.firebase.getSessionHistory(groupBoxId);
+
+      // Format the history properly
+      const formattedHistory = sharedHistory.map((event) => ({
+        ...event,
+        timestamp:
+          event.timestamp instanceof Date
+            ? event.timestamp.toISOString()
+            : event.timestamp,
+      }));
+
+      // REPLACE local history completely (don't merge) - this ensures everyone sees the same thing
+      this.state.groupBoxHistories.set(groupBoxId, formattedHistory);
+      this.state.communityHistory = formattedHistory;
+
+      // Update the display
+      this.updateSessionDisplay();
+
+      console.log(
+        `Refreshed group box ${groupBoxId} with ${formattedHistory.length} events from Firebase`
+      );
+    } catch (error) {
+      console.error("Error refreshing group box history:", error);
     }
   }
 
@@ -328,26 +448,72 @@ class UIController {
 
     if (history.length === 0) {
       historyList.innerHTML =
-        '<div class="no-history">No pulls yet this session</div>';
+        '<div class="no-history">No activity yet this session</div>';
     } else {
       historyList.innerHTML = history
         .slice(0, 50)
         .map((entry) => {
           const timeStr = new Date(entry.timestamp).toLocaleTimeString();
-          return `
-          <div class="history-item">
-            <div class="history-item-name">${entry.item}</div>
-            <div class="history-item-time">${timeStr}</div>
-          </div>
-        `;
+
+          // Handle different event types for group boxes
+          if (this.state.currentLootbox?.isGroupBox && entry.type) {
+            let displayText = entry.message || "";
+            let cssClass = "history-item";
+
+            // Ensure entry properties are not null
+            const safeUserName = entry.userName || "Unknown User";
+            const safeItem = entry.item || "unknown item";
+
+            switch (entry.type) {
+              case "join":
+                cssClass += " history-join";
+                displayText = entry.message || `${safeUserName} joined the box`;
+                break;
+              case "leave":
+                cssClass += " history-leave";
+                displayText = entry.message || `${safeUserName} left the box`;
+                break;
+              case "spin":
+                cssClass += " history-spin";
+                displayText =
+                  entry.message || `${safeUserName} got "${safeItem}"`;
+                break;
+              default:
+                displayText = entry.message || safeItem;
+            }
+
+            return `
+                    <div class="${cssClass}">
+                        <div class="history-item-name">${displayText}</div>
+                        <div class="history-item-time">${timeStr}</div>
+                    </div>
+                `;
+          } else {
+            // Regular lootbox session history
+            return `
+                    <div class="history-item">
+                        <div class="history-item-name">${entry.item}</div>
+                        <div class="history-item-time">${timeStr}</div>
+                    </div>
+                `;
+          }
         })
         .join("");
     }
 
-    // Update total pulls
+    // Update total pulls - ONLY count actual spins, not joins/leaves
     const totalPullsEl = document.getElementById("totalPulls");
     if (totalPullsEl) {
-      totalPullsEl.textContent = history.length;
+      if (this.state.currentLootbox?.isGroupBox) {
+        // For group boxes, only count 'spin' events
+        const actualPulls = history.filter(
+          (entry) => entry.type === "spin"
+        ).length;
+        totalPullsEl.textContent = actualPulls;
+      } else {
+        // For regular lootboxes, all entries are pulls
+        totalPullsEl.textContent = history.length;
+      }
     }
   }
 
@@ -412,9 +578,12 @@ class UIController {
     const container = document.getElementById("toastContainer");
     if (!container) return;
 
+    // Ensure message is a string and not null/undefined
+    const safeMessage = message?.toString() || "Unknown message";
+
     const toast = document.createElement("div");
     toast.className = "toast";
-    toast.textContent = message;
+    toast.textContent = safeMessage;
 
     if (type === "error") {
       toast.style.background = "rgba(239, 68, 68, 0.9)";
@@ -465,16 +634,16 @@ class UIController {
     document.getElementById("revealOdds").checked = true;
     document.getElementById("unlimitedTries").checked = true;
     document.getElementById("maxTries").value = "10";
-    
+
     // Clear items list
     const itemsList = document.getElementById("itemsList");
     if (itemsList) {
       itemsList.innerHTML = "";
     }
-    
+
     // Load and populate chest selection
     await this.populateChestSelection();
-    
+
     // Add initial item row
     this.addItemRow();
   }
@@ -482,17 +651,21 @@ class UIController {
   async populateModalForm(lootbox) {
     // Populate form with lootbox data
     document.getElementById("lootboxName").value = lootbox.name || "";
-    document.getElementById("revealContents").checked = lootbox.revealContents !== false;
-    document.getElementById("revealOdds").checked = lootbox.revealOdds !== false;
-    document.getElementById("unlimitedTries").checked = lootbox.maxTries === "unlimited";
-    document.getElementById("maxTries").value = lootbox.maxTries === "unlimited" ? "10" : lootbox.maxTries;
-    
+    document.getElementById("revealContents").checked =
+      lootbox.revealContents !== false;
+    document.getElementById("revealOdds").checked =
+      lootbox.revealOdds !== false;
+    document.getElementById("unlimitedTries").checked =
+      lootbox.maxTries === "unlimited";
+    document.getElementById("maxTries").value =
+      lootbox.maxTries === "unlimited" ? "10" : lootbox.maxTries;
+
     // Clear and populate items list
     const itemsList = document.getElementById("itemsList");
     if (itemsList) {
       itemsList.innerHTML = "";
       if (lootbox.items && lootbox.items.length > 0) {
-        lootbox.items.forEach(item => {
+        lootbox.items.forEach((item) => {
           this.addItemRow();
           const lastRow = itemsList.lastElementChild;
           if (lastRow) {
@@ -506,10 +679,10 @@ class UIController {
         this.addItemRow();
       }
     }
-    
+
     // Load and populate chest selection
     await this.populateChestSelection(lootbox.chestImage);
-    
+
     this.updateTotalOdds();
   }
 
@@ -519,14 +692,46 @@ class UIController {
 
     // Always use a local fallback list of chests since we have the images
     const defaultChests = [
-      { file: 'chest.png', name: 'Default Chest', description: 'Classic treasure chest' },
-      { file: 'metal.png', name: 'Metal Chest', description: 'Sturdy metal chest' },
-      { file: 'skull_bone.png', name: 'Skull Chest', description: 'Spooky bone chest' },
-      { file: 'wood_flower.png', name: 'Flower Chest', description: 'Wooden chest with flowers' },
-      { file: 'kid_happy.png', name: 'Happy Kid Chest', description: 'Cheerful kid-themed chest' },
-      { file: 'fruit_wood.png', name: 'Fruity Chest', description: 'Chest with fruit' },
-      { file: 'weapon_wood.png', name: 'Weapon Chest', description: 'Wooden chest with weapons' },
-      { file: 'orb_chest.png', name: 'Orb Chest', description: 'Chest with orbs' }
+      {
+        file: "chest.png",
+        name: "Default Chest",
+        description: "Classic treasure chest",
+      },
+      {
+        file: "metal.png",
+        name: "Metal Chest",
+        description: "Sturdy metal chest",
+      },
+      {
+        file: "skull_bone.png",
+        name: "Skull Chest",
+        description: "Spooky bone chest",
+      },
+      {
+        file: "wood_flower.png",
+        name: "Flower Chest",
+        description: "Wooden chest with flowers",
+      },
+      {
+        file: "kid_happy.png",
+        name: "Happy Kid Chest",
+        description: "Cheerful kid-themed chest",
+      },
+      {
+        file: "fruit_wood.png",
+        name: "Fruity Chest",
+        description: "Chest with fruit",
+      },
+      {
+        file: "weapon_wood.png",
+        name: "Weapon Chest",
+        description: "Wooden chest with weapons",
+      },
+      {
+        file: "orb_chest.png",
+        name: "Orb Chest",
+        description: "Chest with orbs",
+      },
     ];
 
     let chests = defaultChests;
@@ -535,7 +740,7 @@ class UIController {
       // Try to get chests from Firebase, but use fallback if it fails
       const firebase = this.lootboxController.firebase;
       console.log("Firebase ready status:", firebase.isReady);
-      
+
       if (firebase.isReady) {
         const firebaseChests = await firebase.loadAvailableChests();
         console.log("Loaded chests from Firebase:", firebaseChests);
@@ -544,20 +749,24 @@ class UIController {
         }
       }
     } catch (error) {
-      console.error("Error loading chests from Firebase, using defaults:", error);
+      console.error(
+        "Error loading chests from Firebase, using defaults:",
+        error
+      );
     }
 
     console.log("Final chests to display:", chests);
-    
+
     // Clear existing content
     chestSelection.innerHTML = "";
-    
+
     // Create chest options
-    chests.forEach(chest => {
+    chests.forEach((chest) => {
       const chestPath = `chests/${chest.file}`;
-      const isSelected = selectedChestImage === chestPath || 
-                        (selectedChestImage === null && chest.file === 'chest.png');
-      
+      const isSelected =
+        selectedChestImage === chestPath ||
+        (selectedChestImage === null && chest.file === "chest.png");
+
       const chestOption = document.createElement("div");
       chestOption.className = `chest-option${isSelected ? " selected" : ""}`;
       chestOption.dataset.image = chestPath;
@@ -565,17 +774,17 @@ class UIController {
         <img src="${chestPath}" alt="${chest.name}" onerror="console.error('Failed to load image: ${chestPath}')">
         <span>${chest.name}</span>
       `;
-      
+
       // Add click handler
       chestOption.addEventListener("click", () => {
         // Remove selected class from all options
-        document.querySelectorAll(".chest-option").forEach(opt => {
+        document.querySelectorAll(".chest-option").forEach((opt) => {
           opt.classList.remove("selected");
         });
         // Add selected class to clicked option
         chestOption.classList.add("selected");
       });
-      
+
       chestSelection.appendChild(chestOption);
     });
   }
@@ -645,7 +854,7 @@ class UIController {
     if (!itemsList || !itemsList.children[index]) return;
 
     itemsList.removeChild(itemsList.children[index]);
-    
+
     // Update indices for remaining items
     Array.from(itemsList.children).forEach((row, idx) => {
       const removeBtn = row.querySelector('[data-action="remove-item"]');
@@ -653,7 +862,7 @@ class UIController {
         removeBtn.dataset.index = idx;
       }
     });
-    
+
     this.updateTotalOdds();
   }
 
@@ -665,10 +874,10 @@ class UIController {
     if (oddsInputs.length === 0) return;
 
     const evenOdds = (1 / oddsInputs.length).toFixed(3);
-    oddsInputs.forEach(input => {
+    oddsInputs.forEach((input) => {
       input.value = evenOdds;
     });
-    
+
     this.updateTotalOdds();
   }
 
@@ -680,7 +889,9 @@ class UIController {
     if (oddsInputs.length === 0) return;
 
     // Generate random weights
-    const weights = Array.from({length: oddsInputs.length}, () => Math.random());
+    const weights = Array.from({ length: oddsInputs.length }, () =>
+      Math.random()
+    );
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
 
     // Normalize to sum to 1
@@ -688,7 +899,7 @@ class UIController {
       const normalizedOdds = (weight / totalWeight).toFixed(3);
       oddsInputs[index].value = normalizedOdds;
     });
-    
+
     this.updateTotalOdds();
   }
 
@@ -699,14 +910,14 @@ class UIController {
 
     const oddsInputs = itemsList.querySelectorAll(".item-odds");
     let total = 0;
-    
-    oddsInputs.forEach(input => {
+
+    oddsInputs.forEach((input) => {
       const value = parseFloat(input.value) || 0;
       total += value;
     });
-    
+
     totalOddsEl.textContent = total.toFixed(3);
-    
+
     // Update styling based on whether total is close to 1
     const isValid = Math.abs(total - 1) < 0.001;
     totalOddsEl.style.color = isValid ? "#10b981" : "#ef4444";
@@ -714,21 +925,25 @@ class UIController {
 
   collectLootboxFormData(formData) {
     const name = document.getElementById("lootboxName")?.value || "";
-    const revealContents = document.getElementById("revealContents")?.checked || false;
+    const revealContents =
+      document.getElementById("revealContents")?.checked || false;
     const revealOdds = document.getElementById("revealOdds")?.checked || false;
-    const unlimitedTries = document.getElementById("unlimitedTries")?.checked || false;
-    const maxTries = unlimitedTries ? "unlimited" : parseInt(document.getElementById("maxTries")?.value) || 10;
-    
+    const unlimitedTries =
+      document.getElementById("unlimitedTries")?.checked || false;
+    const maxTries = unlimitedTries
+      ? "unlimited"
+      : parseInt(document.getElementById("maxTries")?.value) || 10;
+
     // Get selected chest image
     const selectedChest = document.querySelector(".chest-option.selected");
     const chestImage = selectedChest?.dataset.image || "chests/chest.png";
-    
+
     // Collect items
     const itemsList = document.getElementById("itemsList");
     const items = [];
     if (itemsList) {
       const itemRows = itemsList.querySelectorAll(".item-row");
-      itemRows.forEach(row => {
+      itemRows.forEach((row) => {
         const name = row.querySelector(".item-name")?.value;
         const odds = parseFloat(row.querySelector(".item-odds")?.value) || 0;
         if (name && odds > 0) {
@@ -736,7 +951,7 @@ class UIController {
         }
       });
     }
-    
+
     return {
       name: name.trim(),
       items,
@@ -750,19 +965,23 @@ class UIController {
       favorite: false,
       imported: false,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
   }
 
   collectGroupBoxFormData(formData) {
     const groupBoxName = document.getElementById("groupBoxName")?.value || "";
-    const triesPerPerson = parseInt(document.getElementById("triesPerPerson")?.value) || 3;
-    const unlimitedGroupTries = document.getElementById("unlimitedGroupTries")?.checked || false;
+    const triesPerPerson =
+      parseInt(document.getElementById("triesPerPerson")?.value) || 3;
+    const unlimitedGroupTries =
+      document.getElementById("unlimitedGroupTries")?.checked || false;
     const expiresIn = document.getElementById("expiresIn")?.value || "24";
-    const creatorParticipates = document.getElementById("creatorParticipates")?.checked || false;
-    const hideContents = document.getElementById("hideContents")?.checked || false;
+    const creatorParticipates =
+      document.getElementById("creatorParticipates")?.checked || false;
+    const hideContents =
+      document.getElementById("hideContents")?.checked || false;
     const hideOdds = document.getElementById("hideOdds")?.checked || false;
-    
+
     return {
       groupBoxName: groupBoxName.trim(),
       triesPerPerson: unlimitedGroupTries ? "unlimited" : triesPerPerson,
@@ -770,33 +989,36 @@ class UIController {
       expiresIn,
       creatorParticipates,
       hideContents,
-      hideOdds
+      hideOdds,
     };
   }
 
   showFormErrors(errors) {
     // Clear previous errors
-    document.querySelectorAll(".error-message").forEach(el => {
+    document.querySelectorAll(".error-message").forEach((el) => {
       el.classList.add("hidden");
     });
-    
+
     // Show new errors
-    errors.forEach(error => {
-      if (error.includes("name")) {
+    errors.forEach((error) => {
+      // Ensure error is a string and not null/undefined
+      const safeError = error?.toString() || "Unknown error";
+
+      if (safeError.includes("name")) {
         const nameError = document.getElementById("nameError");
         if (nameError) {
-          nameError.textContent = error;
+          nameError.textContent = safeError;
           nameError.classList.remove("hidden");
         }
-      } else if (error.includes("items")) {
+      } else if (safeError.includes("items")) {
         const itemsError = document.getElementById("itemsError");
         if (itemsError) {
-          itemsError.textContent = error;
+          itemsError.textContent = safeError;
           itemsError.classList.remove("hidden");
         }
       } else {
         // Show general error as toast
-        this.showToast(error, "error");
+        this.showToast(safeError, "error");
       }
     });
   }
@@ -805,32 +1027,38 @@ class UIController {
   sortItemsByUsage(a, b) {
     const aData = a.data;
     const bData = b.data;
-    
+
     // Get the most recent activity timestamp for each item
     // Priority: lastUsed/lastParticipated > createdAt/importedAt/firstParticipated
     const aMostRecent = new Date(
-      aData.lastUsed || 
-      aData.lastParticipated || 
-      aData.createdAt || 
-      aData.importedAt || 
-      aData.firstParticipated || 
-      aData.updatedAt || 
-      0
+      aData.lastUsed ||
+        aData.lastParticipated ||
+        aData.createdAt ||
+        aData.importedAt ||
+        aData.firstParticipated ||
+        aData.updatedAt ||
+        0
     );
-    
+
     const bMostRecent = new Date(
-      bData.lastUsed || 
-      bData.lastParticipated || 
-      bData.createdAt || 
-      bData.importedAt || 
-      bData.firstParticipated || 
-      bData.updatedAt || 
-      0
+      bData.lastUsed ||
+        bData.lastParticipated ||
+        bData.createdAt ||
+        bData.importedAt ||
+        bData.firstParticipated ||
+        bData.updatedAt ||
+        0
     );
-    
+
     // Debug logging
-    console.log(`Chronological sort: ${aData.name || aData.groupBoxName} (${a.type}) mostRecent=${aMostRecent} vs ${bData.name || bData.groupBoxName} (${b.type}) mostRecent=${bMostRecent}`);
-    
+    console.log(
+      `Chronological sort: ${aData.name || aData.groupBoxName} (${
+        a.type
+      }) mostRecent=${aMostRecent} vs ${bData.name || bData.groupBoxName} (${
+        b.type
+      }) mostRecent=${bMostRecent}`
+    );
+
     // Most recent activity first
     return bMostRecent - aMostRecent;
   }

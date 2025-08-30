@@ -186,12 +186,16 @@ class GroupBoxController {
 
       // Save to Firebase
       const groupBoxId = await this.firebase.saveGroupBox(groupBoxData);
+      if (!groupBoxId) {
+        throw new Error("Failed to create group box ID");
+      }
 
-      // Create local instance
       const groupBox = new GroupBox({
         ...groupBoxData,
-        groupBoxId,
+        id: groupBoxId, // ADD THIS
+        groupBoxId: groupBoxId, // Make sure this is here
         groupBoxName: lootboxData.name,
+        items: lootboxData.items,
         isCreator: true,
         isOrganizerOnly: !settings.creatorParticipates,
         userTotalOpens: 0,
@@ -204,6 +208,59 @@ class GroupBoxController {
 
       this.groupBoxes.push(groupBox);
       await this.save();
+
+      // If creator participates, record their join
+      // If creator participates, also create a participant record for them
+      if (settings.creatorParticipates) {
+        const { collection, addDoc } = window.firebaseFunctions;
+        const participantData = {
+          groupBoxId,
+          groupBoxName: lootboxData.name,
+          lootboxData: groupBoxData.lootboxData,
+          settings: groupBoxData.settings,
+          createdBy: currentUser.uid,
+          creatorName: currentUser.displayName || "Anonymous",
+          totalOpens: 0,
+          uniqueUsers: 0,
+          firstParticipated: new Date().toISOString(),
+          userTotalOpens: 0,
+          userRemainingTries: settings.unlimitedGroupTries
+            ? "unlimited"
+            : settings.triesPerPerson,
+          isCreator: true,
+          isOrganizerOnly: false,
+          favorite: false,
+        };
+
+        const docRef = await addDoc(
+          collection(
+            this.firebase.db,
+            "users",
+            currentUser.uid,
+            "participated_group_boxes"
+          ),
+          participantData
+        );
+
+        // Update the local group box with the document ID
+        groupBox.id = docRef.id;
+        this.groupBoxes[this.groupBoxes.length - 1].id = docRef.id;
+        // Update the GroupBox in the array with the correct id
+        const index = this.groupBoxes.findIndex(
+          (gb) => gb.groupBoxId === groupBoxId
+        );
+        if (index >= 0) {
+          this.groupBoxes[index].id = docRef.id;
+        }
+        // Record join event for creator
+        await this.firebase.addSessionHistoryEvent(groupBoxId, {
+          type: "join",
+          userId: currentUser.uid,
+          userName: currentUser.uid,
+          message: `User ${currentUser.uid} joined the box`,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       return { success: true, groupBoxId, groupBox };
     } catch (error) {
@@ -227,6 +284,25 @@ class GroupBoxController {
       if (!groupBoxData) {
         return { success: false, errors: ["Group box not found"] };
       }
+      // Check if it still exists in Firebase
+      let existsInFirebase = true;
+      try {
+        await this.firebase.loadGroupBox(groupBoxId);
+      } catch (error) {
+        existsInFirebase = false;
+      }
+
+      // If it doesn't exist in Firebase, just remove it locally
+      if (!existsInFirebase) {
+        const index = this.groupBoxes.findIndex(
+          (gb) => gb.groupBoxId === groupBoxId
+        );
+        if (index >= 0) {
+          this.groupBoxes.splice(index, 1);
+        }
+        await this.save();
+        return { success: true, groupBoxName: groupBox.groupBoxName };
+      }
 
       const currentUser = this.firebase.getCurrentUser();
       if (!currentUser) {
@@ -241,6 +317,10 @@ class GroupBoxController {
         return { success: false, errors: ["This group box has expired"] };
       }
 
+      console.log(
+        "Setting tries for new participant:",
+        groupBoxData.settings?.triesPerPerson
+      );
       // Create participant record
       const participantData = {
         groupBoxId,
@@ -270,12 +350,23 @@ class GroupBoxController {
         ),
         participantData
       );
+      // Record join event in session history
+      await this.firebase.addSessionHistoryEvent(groupBoxId, {
+        type: "join",
+        userId: currentUser.uid,
+        userName: currentUser.uid, // Use UID instead of display name
+        message: `User ${currentUser.uid} joined the box`,
+        timestamp: new Date().toISOString(),
+      });
 
       participantData.id = docRef.id;
 
       const groupBox = new GroupBox(participantData);
       this.groupBoxes.push(groupBox);
       await this.save();
+
+      // Record join event in shared session history
+      const userName = currentUser.uid;
 
       return { success: true, alreadyJoined: false, groupBox };
     } catch (error) {
@@ -310,33 +401,38 @@ class GroupBoxController {
       groupBox.userRemainingTries--;
       groupBox.lastParticipated = new Date().toISOString();
 
-      // Record in community history
-      this.communityHistory.unshift({
+      // Record spin event in shared session history (local history is handled by App.handleSpinResult)
+      const userName = currentUser.uid;
+      await this.firebase.addSessionHistoryEvent(groupBoxId, {
+        type: "spin",
         userId: currentUser.uid,
-        userName: currentUser.displayName || "Anonymous",
+        userName: userName,
         item: result.item,
-        timestamp: result.timestamp,
-        groupBoxId,
+        message: `${userName} opened the box and got "${result.item}"`,
+        timestamp: new Date().toISOString(),
       });
 
       // Save to Firebase
+      // Save to Firebase
       if (this.firebase.isReady) {
-        // Update participant record
-        const { updateDoc, doc } = window.firebaseFunctions;
-        await updateDoc(
-          doc(
-            this.firebase.db,
-            "users",
-            currentUser.uid,
-            "participated_group_boxes",
-            groupBox.id
-          ),
-          {
-            userTotalOpens: groupBox.userTotalOpens,
-            userRemainingTries: groupBox.userRemainingTries,
-            lastParticipated: groupBox.lastParticipated,
-          }
-        );
+        // Update participant record only if we have an id
+        if (groupBox.id) {
+          const { updateDoc, doc } = window.firebaseFunctions;
+          await updateDoc(
+            doc(
+              this.firebase.db,
+              "users",
+              currentUser.uid,
+              "participated_group_boxes",
+              groupBox.id
+            ),
+            {
+              userTotalOpens: groupBox.userTotalOpens,
+              userRemainingTries: groupBox.userRemainingTries,
+              lastParticipated: groupBox.lastParticipated,
+            }
+          );
+        }
 
         // Record spin
         await this.firebase.recordSpin(groupBoxId, result);
@@ -362,14 +458,57 @@ class GroupBoxController {
         return { success: false, errors: ["User not authenticated"] };
       }
 
+      // Check if group box still exists in Firebase
+      let existsInFirebase = true;
+      try {
+        await this.firebase.loadGroupBox(groupBoxId);
+      } catch (error) {
+        existsInFirebase = false;
+      }
+
       const groupBoxName = groupBox.groupBoxName;
 
+      // If it doesn't exist in Firebase, just remove it locally
+      if (!existsInFirebase) {
+        // Remove from user's participated collection if it has an id
+        if (groupBox.id) {
+          try {
+            const { deleteDoc, doc } = window.firebaseFunctions;
+            await deleteDoc(
+              doc(
+                this.firebase.db,
+                "users",
+                currentUser.uid,
+                "participated_group_boxes",
+                groupBox.id
+              )
+            );
+          } catch (error) {
+            // Ignore errors - document might already be gone
+            console.log("Couldn't delete user participation record:", error);
+          }
+        }
+
+        // Remove from local array
+        const index = this.groupBoxes.findIndex(
+          (gb) => gb.groupBoxId === groupBoxId
+        );
+        if (index >= 0) {
+          this.groupBoxes.splice(index, 1);
+        }
+
+        await this.save();
+        return {
+          success: true,
+          groupBoxName: groupBoxName + " (already deleted by creator)",
+        };
+      }
+
+      // If we're here, the group box exists in Firebase
       if (deleteForEveryone && groupBox.isCreator) {
         // Delete the group box from Firebase (for everyone)
         const { deleteDoc, doc } = window.firebaseFunctions;
-        await deleteDoc(
-          doc(this.firebase.db, "group_boxes", groupBoxId)
-        );
+        await deleteDoc(doc(this.firebase.db, "group_boxes", groupBoxId));
       } else {
         // Just remove from user's participated collection
         if (groupBox.id) {
@@ -384,6 +523,16 @@ class GroupBoxController {
             )
           );
         }
+
+        // Record leave event only if the group still exists
+        const userName = currentUser.uid;
+        await this.firebase.addSessionHistoryEvent(groupBoxId, {
+          type: "leave",
+          userId: currentUser.uid,
+          userName: userName,
+          message: `${userName} has left the box`,
+          timestamp: new Date().toISOString(),
+        });
       }
 
       // Remove from local array

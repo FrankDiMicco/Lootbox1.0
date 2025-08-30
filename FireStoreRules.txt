@@ -8,7 +8,46 @@ service cloud.firestore {
                     && request.resource.data.uid == request.auth.uid;
       allow read, update, delete: if request.auth != null
                     && resource.data.uid == request.auth.uid;
+    }rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow users to read/write their own data
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+    
+    // Allow authenticated users to read/write lootboxes they own
+    match /lootboxes/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Group boxes - anyone authenticated can read
+    match /group_boxes/{groupBoxId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+      
+      // Session history - anyone authenticated can read/write
+      match /session_history/{historyId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+    
+    // Test collection
+    match /tests/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Spins collection
+    match /spins/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Chests collection
+    match /chests/{document=**} {
+      allow read: if true;
+    }
+  }
+}
 
     match /group_boxes/{groupBoxId} {
       // Anyone can read group boxes (for sharing)

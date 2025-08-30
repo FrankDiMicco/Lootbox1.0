@@ -375,7 +375,7 @@ body {
 
 .modal-header {
     padding: 8px 16px;
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 30%, #334155 100%);
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 20%, #312e81 50%, #1e293b 100%);
     color: #f1f5f9;
     display: flex;
     justify-content: space-between;
@@ -383,7 +383,7 @@ body {
     flex-shrink: 0;
     position: relative;
     overflow: hidden;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    border-bottom: 1px solid rgba(139, 92, 246, 0.2);
     backdrop-filter: blur(20px);
 }
 
@@ -394,7 +394,7 @@ body {
     right: -30px;
     width: 80px;
     height: 80px;
-    background: radial-gradient(circle, rgba(94, 234, 212, 0.15) 0%, rgba(59, 130, 246, 0.1) 40%, transparent 70%);
+    background: radial-gradient(circle, rgba(168, 85, 247, 0.2) 0%, rgba(139, 92, 246, 0.15) 40%, transparent 70%);
     border-radius: 50%;
     pointer-events: none;
     animation: float 6s ease-in-out infinite;
@@ -1698,4 +1698,35 @@ body {
 .join-event {
     color: #059669;
     font-style: italic;
+}
+
+/* New session history event styles */
+.history-join {
+    background: #ecfdf5;
+    border-left: 3px solid #10b981;
+}
+
+.history-join .history-item-name {
+    color: #059669;
+    font-style: italic;
+}
+
+.history-leave {
+    background: #fef2f2;
+    border-left: 3px solid #ef4444;
+}
+
+.history-leave .history-item-name {
+    color: #dc2626;
+    font-style: italic;
+}
+
+.history-spin {
+    background: #eff6ff;
+    border-left: 3px solid #3b82f6;
+}
+
+.history-spin .history-item-name {
+    color: #1d4ed8;
+    font-weight: 600;
 }

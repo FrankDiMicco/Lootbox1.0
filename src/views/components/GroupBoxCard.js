@@ -135,12 +135,13 @@ class GroupBoxCard {
       window.modernApp?.groupBoxController?.getCommunityHistory?.() ||
       [];
 
-    // Count unique users who have spun/opened
+    // Count unique users who have SPUN (not just joined)
     const uniqueUserIds = new Set();
     let totalOpens = 0;
 
     for (const entry of communityHistory) {
-      if (entry.item && entry.userId) {
+      // Only count spin events, not joins/leaves
+      if (entry.type === "spin" && entry.userId) {
         uniqueUserIds.add(entry.userId);
         totalOpens++;
       }
@@ -151,7 +152,6 @@ class GroupBoxCard {
       totalOpens,
     };
   }
-
   /**
    * Render the action buttons for a group box card
    * @param {Object} groupBox - The group box data object

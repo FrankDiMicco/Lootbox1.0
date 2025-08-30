@@ -32,6 +32,8 @@ class App {
       currentLootboxIndex: -1,
       sessionHistory: [],
       communityHistory: [],
+      groupBoxHistories: new Map(), // Store per-group-box session histories
+      historyRefreshTimer: null, // Timer for refreshing group box history
       isOnCooldown: false,
       popupTimeout: null,
       editingIndex: -1,
@@ -192,9 +194,7 @@ class App {
               false // deleteForEveryone = false (just leave the group)
             );
             if (result.success) {
-              this.controllers.ui.showToast(
-                `Left "${result.groupBoxName}"`
-              );
+              this.controllers.ui.showToast(`Left "${result.groupBoxName}"`);
               this.controllers.ui.closeModal("deleteModal");
               this.controllers.ui.render();
             }
@@ -402,7 +402,9 @@ class App {
       }
     } catch (error) {
       console.error(`Error handling action ${action}:`, error);
-      this.controllers.ui.showToast(`Error: ${error.message}`, "error");
+      const errorMessage =
+        error?.message || error?.toString() || "Unknown error";
+      this.controllers.ui.showToast(`Error: ${errorMessage}`, "error");
     }
   }
 
@@ -416,6 +418,18 @@ class App {
     if (lootbox.isGroupBox) {
       if (this.state.isOrganizerReadonly) {
         this.controllers.ui.showToast("Organizer view - opens disabled");
+        return;
+      }
+
+      // Check if group box still exists before spinning
+      try {
+        await this.services.firebase.loadGroupBox(lootbox.groupBoxId);
+      } catch (error) {
+        this.controllers.ui.showToast(
+          "This group box has been deleted",
+          "error"
+        );
+        this.controllers.ui.showListView();
         return;
       }
 
@@ -446,27 +460,30 @@ class App {
     this.controllers.ui.updateLootboxInteractivity();
 
     // Add to history
-    if (this.state.currentLootbox.isGroupBox) {
-      this.state.communityHistory.unshift({
-        userId: this.services.firebase.getCurrentUser()?.uid || "anonymous",
-        userName: "You",
-        item: result.item,
-        timestamp: new Date(),
-      });
-    } else {
+    // Only add to local history for regular lootboxes
+    if (!this.state.currentLootbox.isGroupBox) {
       this.state.sessionHistory.unshift({
         item: result.item,
         timestamp: new Date(),
         lootboxName: this.state.currentLootbox.name,
       });
     }
+    // For group boxes, the Firebase refresh will handle history updates
 
     // Show result popup
     this.controllers.ui.showResultPopup(result.item);
 
     // Update display
     this.controllers.ui.updateSessionDisplay();
-    this.controllers.ui.renderLootboxView();
+    // Update tries display for group boxes
+    if (this.state.currentLootbox?.isGroupBox) {
+      //this.state.currentLootbox.userRemainingTries--;
+      const triesEl = document.getElementById("triesInfo");
+      if (triesEl) {
+        triesEl.textContent = `Tries remaining: ${this.state.currentLootbox.userRemainingTries}`;
+      }
+      this.controllers.ui.updateLootboxInteractivity();
+    }
 
     // Clear cooldown after 1.5 seconds
     setTimeout(() => {
@@ -528,6 +545,8 @@ class App {
 
       if (shareUrl.success) {
         await this.shareUrl(shareUrl.url, shareUrl.groupBoxName);
+        // Force a small delay to ensure Firebase writes are complete
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
       this.controllers.ui.render();
@@ -548,7 +567,7 @@ class App {
     const deleteBtn = modal?.querySelector('[data-action="confirm-delete"]');
     if (modal && nameEl && deleteBtn) {
       nameEl.textContent = lootbox.name;
-      deleteBtn.setAttribute('data-type', 'lootbox');
+      deleteBtn.setAttribute("data-type", "lootbox");
       modal.classList.add("show");
     }
   }
@@ -574,7 +593,7 @@ class App {
       const deleteBtn = modal?.querySelector('[data-action="confirm-delete"]');
       if (modal && nameEl && deleteBtn) {
         nameEl.textContent = groupBox.groupBoxName;
-        deleteBtn.setAttribute('data-type', 'groupbox');
+        deleteBtn.setAttribute("data-type", "groupbox");
         modal.classList.add("show");
       }
     }
@@ -613,6 +632,11 @@ class App {
   clearSessionHistory() {
     if (this.state.currentLootbox?.isGroupBox) {
       this.state.communityHistory = [];
+      // Also clear the persistent history for this group box
+      const groupBoxId = this.state.currentLootbox.groupBoxId;
+      if (groupBoxId) {
+        this.state.groupBoxHistories.set(groupBoxId, []);
+      }
     } else {
       this.state.sessionHistory = [];
     }

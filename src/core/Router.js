@@ -45,13 +45,20 @@ class Router {
       );
 
       if (result.success) {
+        // <-- THIS LINE WAS MISSING
         if (result.alreadyJoined) {
-          this.app.controllers.ui.openGroupBox(groupBoxId);
+          this.app.controllers.ui.showToast("Welcome back to the group box!");
         } else {
           this.app.controllers.ui.showToast(
             `Joined "${result.groupBox.groupBoxName}"`
           );
         }
+
+        // Small delay to ensure Firebase write completes before opening
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // Now open the group box
+        await this.app.controllers.ui.openGroupBox(groupBoxId);
       } else {
         this.app.controllers.ui.showToast(result.errors[0], "error");
       }
