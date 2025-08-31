@@ -250,6 +250,19 @@ class GroupBoxController {
           isOrganizerOnly: false,
           favorite: false,
         };
+        console.log(
+          "Trying to write to:",
+          `users/${currentUser.uid}/participated_group_boxes/${groupBoxId}`
+        );
+        console.log("Current user:", currentUser.uid);
+        console.log("About to setDoc with:");
+        console.log("  User ID:", currentUser.uid);
+        console.log("  Group Box ID:", groupBoxId);
+        console.log(
+          "  Path:",
+          `users/${currentUser.uid}/participated_group_boxes/${groupBoxId}`
+        );
+        console.log("  Data:", participantData);
 
         await setDoc(
           doc(
@@ -466,51 +479,130 @@ class GroupBoxController {
         return { success: false, error: "Firebase not available" };
       }
 
-      // Load the current group box data
-      const groupBoxData = await this.firebase.loadGroupBox(groupBoxId);
-      if (!groupBoxData) {
+      const { getDoc, updateDoc, setDoc, doc } = window.firebaseFunctions;
+
+      // Load the group box
+      const gbRef = doc(this.firebase.db, "group_boxes", groupBoxId);
+      const gbSnap = await getDoc(gbRef);
+      if (!gbSnap.exists())
         return { success: false, error: "Group box not found" };
-      }
 
-      // Find the participant
-      const participants = groupBoxData.participants || [];
-      const participantIndex = participants.findIndex(
-        (p) => p.userId === userId
+      const gbData = gbSnap.data();
+      const participants = Array.isArray(gbData.participants)
+        ? [...gbData.participants]
+        : [];
+
+      // Find participant
+      const i = participants.findIndex((p) => p.userId === userId);
+      if (i === -1) return { success: false, error: "Participant not found" };
+
+      // Compute new tries
+      const current = Number(participants[i].userRemainingTries || 0);
+      const next = Math.max(0, current + (Number(delta) || 0));
+
+      // Update participant in the shared array
+      participants[i] = {
+        ...participants[i],
+        userRemainingTries: next,
+      };
+
+      console.log(
+        "About to update main group_boxes document with new participants array"
       );
+      console.log("Participant before:", gbData.participants[i]);
+      console.log("Participant after:", participants[i]);
 
-      if (participantIndex === -1) {
-        return { success: false, error: "Participant not found" };
+      try {
+        await updateDoc(gbRef, {
+          participants,
+          updatedAt: new Date().toISOString(),
+        });
+        console.log(
+          "SUCCESS: Main group_boxes document updated. New tries:",
+          next
+        );
+        // If this is for another user (not the organizer), trigger a refresh for them
+        const me = this.firebase.getCurrentUser();
+        if (me && me.uid !== userId) {
+          // Add a "refresh" event to session history that participants can listen for
+          await this.firebase.addSessionHistoryEvent(groupBoxId, {
+            type: "refresh_tries",
+            userId: userId,
+            message: `Refresh tries for ${userId}`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        // IMMEDIATELY verify the update worked
+        const verifySnap = await getDoc(gbRef);
+        const verifyData = verifySnap.data();
+        const verifyParticipant = verifyData.participants.find(
+          (p) => p.userId === userId
+        );
+        console.log(
+          "VERIFY: After update, Firebase shows tries:",
+          verifyParticipant?.userRemainingTries
+        );
+        if (verifyParticipant?.userRemainingTries !== next) {
+          console.error("UPDATE FAILED! Firebase still shows old value!");
+        }
+      } catch (error) {
+        console.error("FAILED to update main group_boxes document:", error);
+        console.error(
+          "This is the REAL problem - participants array not updating"
+        );
+        return { success: false, error: error.message };
+      }
+      // Try to update participant's personal record - use setDoc with merge instead
+      try {
+        const participantRef = doc(
+          this.firebase.db,
+          "users",
+          userId,
+          "participated_group_boxes",
+          groupBoxId
+        );
+
+        // Use setDoc with merge:true to create if doesn't exist
+        await setDoc(
+          participantRef,
+          {
+            userRemainingTries: next,
+            updatedAt: new Date().toISOString(),
+            groupBoxId: groupBoxId, // ensure this field exists
+          },
+          { merge: true }
+        );
+
+        console.log(`Updated participant ${userId} tries to ${next}`);
+      } catch (partError) {
+        // Log but don't fail - the main record was updated
+        console.warn(
+          "Could not update participant's personal record:",
+          partError
+        );
       }
 
-      // Calculate new tries value
-      const currentTries =
-        participants[participantIndex].userRemainingTries || 0;
-      const newTries = Math.max(0, currentTries + delta); // Prevent negative tries
-
-      // Update the participant's tries
-      participants[participantIndex].userRemainingTries = newTries;
-
-      // Save to Firebase
-      const { updateDoc, doc } = window.firebaseFunctions;
-      await updateDoc(doc(this.firebase.db, "group_boxes", groupBoxId), {
-        participants: participants,
-        updatedAt: new Date().toISOString(),
+      //log a grant event
+      await this.firebase.addSessionHistoryEvent(groupBoxId, {
+        type: "grant",
+        userId,
+        userName: participants[i].userName || userId,
+        message: `Organizer granted ${delta > 0 ? "+" : ""}${delta} open(s)`,
       });
 
-      // Also update the user's personal participation record if they have one
-      const currentUser = this.firebase.getCurrentUser();
-      if (currentUser && userId === currentUser.uid) {
-        // Find the local group box
-        const localGroupBox = this.groupBoxes.find(
+      // Update locally if this is the current user in memory
+      const me = this.firebase.getCurrentUser();
+      if (me && me.uid === userId) {
+        const local = this.groupBoxes.find(
           (gb) => gb.groupBoxId === groupBoxId
         );
-        if (localGroupBox) {
-          localGroupBox.userRemainingTries = newTries;
+        if (local) {
+          local.userRemainingTries = next;
           await this.save();
         }
       }
 
-      return { success: true, newTries };
+      return { success: true, newTries: next };
     } catch (error) {
       console.error("Error adjusting user tries:", error);
       return { success: false, error: error.message };
@@ -519,14 +611,62 @@ class GroupBoxController {
 
   async spinGroupBox(groupBoxId) {
     try {
-      const groupBox = this.getGroupBox(groupBoxId);
-      if (!groupBox) {
-        return { success: false, errors: ["Group box not found"] };
-      }
-
       const currentUser = this.firebase.getCurrentUser();
       if (!currentUser) {
         return { success: false, errors: ["User not authenticated"] };
+      }
+
+      console.log("SPIN: Starting spin for user", currentUser.uid);
+
+      // FORCE RELOAD FROM FIREBASE TO GET LATEST TRIES
+      const freshData = await this.firebase.loadGroupBox(groupBoxId);
+      if (!freshData) {
+        return { success: false, errors: ["Group box not found in Firebase"] };
+      }
+
+      console.log("SPIN: Fresh participants data:", freshData.participants);
+
+      // Find this user's fresh participant data
+      const freshParticipant = freshData.participants?.find(
+        (p) => p.userId === currentUser.uid
+      );
+
+      if (!freshParticipant) {
+        console.error("SPIN: User not found in participants!");
+        return {
+          success: false,
+          errors: ["You are not a participant in this group box"],
+        };
+      }
+
+      console.log(
+        "SPIN: User's fresh tries from Firebase:",
+        freshParticipant.userRemainingTries
+      );
+
+      // Get local group box
+      const groupBox = this.getGroupBox(groupBoxId);
+      if (!groupBox) {
+        return { success: false, errors: ["Group box not found locally"] };
+      }
+
+      // UPDATE LOCAL WITH FRESH DATA FROM FIREBASE
+      groupBox.userRemainingTries = freshParticipant.userRemainingTries;
+      groupBox.userTotalOpens = freshParticipant.userTotalOpens || 0;
+
+      console.log("SPIN: Updated local tries to:", groupBox.userRemainingTries);
+
+      // Check if can spin with FRESH data
+      if (
+        groupBox.userRemainingTries === 0 ||
+        groupBox.userRemainingTries === "0"
+      ) {
+        return {
+          success: false,
+          errors: [
+            `No remaining tries (you have ${groupBox.userRemainingTries})`,
+          ],
+        };
       }
 
       if (!groupBox.canSpin(currentUser.uid)) {
@@ -536,15 +676,31 @@ class GroupBoxController {
         };
       }
 
+      // Do the spin
       const result = groupBox.spinForUser(currentUser.uid);
 
       // Update local stats
       groupBox.userTotalOpens++;
-      groupBox.userRemainingTries--;
+      groupBox.userRemainingTries =
+        typeof groupBox.userRemainingTries === "number"
+          ? groupBox.userRemainingTries - 1
+          : parseInt(groupBox.userRemainingTries) - 1;
       groupBox.lastParticipated = new Date().toISOString();
 
-      // Record spin event in shared session history (local history is handled by App.handleSpinResult)
-      const userName = currentUser.uid;
+      console.log("SPIN: After spin, tries left:", groupBox.userRemainingTries);
+
+      const userName = currentUser.displayName || currentUser.uid;
+
+      // Update the main document's participants array
+      await this.firebase.updateGroupBoxParticipant(groupBoxId, {
+        userId: currentUser.uid,
+        userName: userName,
+        userTotalOpens: groupBox.userTotalOpens,
+        userRemainingTries: groupBox.userRemainingTries,
+        joinedAt: groupBox.firstParticipated || new Date().toISOString(),
+      });
+
+      // Record spin event
       await this.firebase.addSessionHistoryEvent(groupBoxId, {
         type: "spin",
         userId: currentUser.uid,
@@ -554,11 +710,9 @@ class GroupBoxController {
         timestamp: new Date().toISOString(),
       });
 
-      // Save to Firebase
-      // Save to Firebase
-      if (this.firebase.isReady) {
-        // Update participant record only if we have an id
-        if (groupBox.id) {
+      // Update user's personal record
+      if (this.firebase.isReady && groupBox.id) {
+        try {
           const { updateDoc, doc } = window.firebaseFunctions;
           await updateDoc(
             doc(
@@ -574,13 +728,14 @@ class GroupBoxController {
               lastParticipated: groupBox.lastParticipated,
             }
           );
+        } catch (e) {
+          console.warn("Could not update personal record:", e);
         }
-
-        // Record spin
-        await this.firebase.recordSpin(groupBoxId, result);
       }
 
+      await this.firebase.recordSpin(groupBoxId, result);
       await this.save();
+
       return { success: true, result };
     } catch (error) {
       console.error("Error spinning group box:", error);

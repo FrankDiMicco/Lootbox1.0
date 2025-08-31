@@ -182,7 +182,8 @@ class FirebaseService {
     const data = { id: boxSnap.id, ...boxSnap.data() };
 
     // DO NOT log "join" here.
-    // If the user is already participating, just bump lastSeenAt (no new record).
+    // If the user is already participating, just bump lastSeenAt (no new record)
+    // and mirror remaining/opens into their own user doc.
     const user = this.getCurrentUser();
     if (user) {
       const partRef = doc(
@@ -197,6 +198,23 @@ class FirebaseService {
         await setDoc(
           partRef,
           { lastSeenAt: serverTimestamp() },
+          { merge: true }
+        );
+      }
+
+      // Mirror from shared participants -> my personal record
+      const me = (data.participants || []).find((p) => p.userId === user.uid);
+      if (me) {
+        await setDoc(
+          partRef,
+          {
+            groupBoxId: id,
+            groupBoxName: data.lootboxData?.name || data.name || "",
+            userRemainingTries: me.userRemainingTries ?? 0,
+            userTotalOpens: me.userTotalOpens ?? 0,
+            lastSeenAt: serverTimestamp(),
+            isGroupBox: true,
+          },
           { merge: true }
         );
       }

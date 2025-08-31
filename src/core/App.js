@@ -16,6 +16,10 @@ class App {
 
     this.handleAdjustTries = this.handleAdjustTries.bind(this);
 
+    // Flags
+    this._delegationSetup = false; // prevent double listeners
+    this._adjustTriesBusy = false; // debounce adjust-tries
+
     // Controllers
     this.controllers = {
       lootbox: null,
@@ -52,6 +56,7 @@ class App {
   }
 
   async initialize() {
+    if (this.isInitialized) return;
     try {
       console.log("Initializing Lootbox Creator...");
 
@@ -115,6 +120,8 @@ class App {
   }
 
   setupEventDelegation() {
+    if (this._delegationSetup) return;
+    this._delegationSetup = true;
     // Single event listener at document level for all clicks
     document.addEventListener("click", async (e) => {
       const action = e.target.closest("[data-action]");
@@ -449,40 +456,53 @@ class App {
     }
   }
   async handleAdjustTries(data) {
-    const groupBoxId = this.state.currentEditGroupBoxId;
-    const userId = data.userId;
-    const delta = parseInt(data.delta);
-
-    if (!groupBoxId || !userId) {
-      console.error("Missing groupBoxId or userId for tries adjustment");
-      return;
-    }
+    // simple debounce so one click = one change
+    if (this._adjustTriesBusy) return;
+    this._adjustTriesBusy = true;
 
     try {
-      // Update in Firebase
-      const result = await this.controllers.groupBox.adjustUserTries(
+      const groupBoxId = this.state.currentEditGroupBoxId;
+      const userId = data.userId;
+      const delta = parseInt(data.delta, 10) || 0;
+
+      if (!groupBoxId || !userId || !Number.isFinite(delta)) {
+        this.controllers.ui.showToast("Missing info for adjust tries", "error");
+        return;
+      }
+
+      // Apply the change in the backend
+      const res = await this.controllers.groupBox.adjustUserTries(
         groupBoxId,
         userId,
         delta
       );
 
-      if (result.success) {
-        // Update the display
-        const triesDisplay = document.getElementById(`tries-${userId}`);
-        if (triesDisplay) {
-          triesDisplay.textContent = result.newTries;
-        }
-
-        this.controllers.ui.showToast(`Updated tries for user`);
-      } else {
+      if (!res || !res.success) {
         this.controllers.ui.showToast(
-          result.error || "Failed to update tries",
+          res?.error || "Failed to update tries",
           "error"
         );
+        return;
       }
-    } catch (error) {
-      console.error("Error adjusting tries:", error);
-      this.controllers.ui.showToast("Failed to adjust tries", "error");
+
+      // Update the little center bubble that shows "granted this session"
+      const grantEl = document.getElementById(`grant-${userId}`);
+      if (grantEl) {
+        let granted = parseInt(grantEl.textContent || "0", 10);
+        granted = Math.max(0, granted + delta);
+        grantEl.textContent = String(granted);
+      }
+
+      // Update the "Remaining: X" label under the user
+      const remainingEl = document.getElementById(`remaining-${userId}`);
+      if (remainingEl) remainingEl.textContent = String(res.newTries);
+
+      this.controllers.ui.showToast(`Updated tries to ${res.newTries}`);
+    } catch (e) {
+      console.error("Error adjusting tries:", e);
+      this.controllers.ui.showToast("Failed to update tries", "error");
+    } finally {
+      this._adjustTriesBusy = false;
     }
   }
 

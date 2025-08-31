@@ -392,29 +392,47 @@ class UIController {
     if (!this.lootboxController.firebase.isReady) return;
 
     try {
-      // Get the complete history from Firebase - this is the source of truth
       const sharedHistory =
         await this.lootboxController.firebase.getSessionHistory(groupBoxId);
 
-      // Format the history properly
-      const formattedHistory = sharedHistory.map((event) => ({
-        ...event,
-        timestamp:
-          event.timestamp instanceof Date
-            ? event.timestamp.toISOString()
-            : event.timestamp,
-      }));
-
-      // REPLACE local history completely (don't merge) - this ensures everyone sees the same thing
-      this.state.groupBoxHistories.set(groupBoxId, formattedHistory);
-      this.state.communityHistory = formattedHistory;
-
-      // Update the display
-      this.updateSessionDisplay();
-
-      console.log(
-        `Refreshed group box ${groupBoxId} with ${formattedHistory.length} events from Firebase`
+      // Check if there's a recent refresh_tries event for current user
+      const currentUser = this.lootboxController.firebase.getCurrentUser();
+      const recentRefresh = sharedHistory.find(
+        (event) =>
+          event.type === "refresh_tries" &&
+          event.userId === currentUser?.uid &&
+          new Date() - new Date(event.timestamp) < 20000 // Within last 20 seconds
       );
+
+      if (
+        recentRefresh ||
+        sharedHistory.length !== this.state.communityHistory?.length
+      ) {
+        // Reload group box data to get fresh tries
+        const freshData = await this.lootboxController.firebase.loadGroupBox(
+          groupBoxId
+        );
+        const freshParticipant = freshData?.participants?.find(
+          (p) => p.userId === currentUser?.uid
+        );
+
+        if (freshParticipant && this.state.currentLootbox) {
+          this.state.currentLootbox.userRemainingTries =
+            freshParticipant.userRemainingTries;
+
+          // Update UI
+          const triesEl = document.getElementById("triesInfo");
+          if (triesEl) {
+            triesEl.textContent = `Tries remaining: ${freshParticipant.userRemainingTries}`;
+          }
+          this.updateLootboxInteractivity();
+        }
+      }
+
+      // Update history display
+      this.state.groupBoxHistories.set(groupBoxId, sharedHistory);
+      this.state.communityHistory = sharedHistory;
+      this.updateSessionDisplay();
     } catch (error) {
       console.error("Error refreshing group box history:", error);
     }
@@ -888,33 +906,42 @@ class UIController {
       usersList.innerHTML = participants
         .map(
           (participant) => `
-            <div class="edit-user-row" data-user-id="${participant.userId}">
-                <div class="edit-user-info">
-                    <div class="edit-user-name">
-                        ${this.escapeHtml(participant.userName)}
-                        ${
-                          participant.userId === groupBoxData.createdBy
-                            ? '<span class="creator-badge">Creator</span>'
-                            : ""
-                        }
-                    </div>
-                    <div class="edit-user-stats">
-                        <span>Opens: ${participant.userTotalOpens || 0}</span>
-                    </div>
-                </div>
-                <div class="tries-control">
-                    <button class="tries-btn minus" data-action="adjust-tries" data-user-id="${
-                      participant.userId
-                    }" data-delta="-1">−</button>
-                    <div class="tries-display" id="tries-${
-                      participant.userId
-                    }">${participant.userRemainingTries || 0}</div>
-                    <button class="tries-btn plus" data-action="adjust-tries" data-user-id="${
-                      participant.userId
-                    }" data-delta="1">+</button>
-                </div>
-            </div>
-        `
+      <div class="edit-user-row" data-user-id="${participant.userId}">
+        <div class="edit-user-info">
+          <div class="edit-user-name">
+            ${this.escapeHtml(participant.userName)}
+            ${
+              participant.userId === groupBoxData.createdBy
+                ? '<span class="creator-badge">Creator</span>'
+                : ""
+            }
+          </div>
+          <div class="edit-user-stats">
+            <span>Opens: ${participant.userTotalOpens || 0}</span>
+            <span style="margin-left:12px;">
+              Remaining: <strong id="remaining-${participant.userId}">
+                ${participant.userRemainingTries ?? 0}
+              </strong>
+            </span>
+          </div>
+        </div>
+
+        <div class="tries-control">
+          <button class="tries-btn minus"
+                  data-action="adjust-tries"
+                  data-user-id="${participant.userId}"
+                  data-delta="-1">−</button>
+
+          <!-- Grant counter starts at 0 -->
+          <div class="tries-display" id="grant-${participant.userId}">0</div>
+
+          <button class="tries-btn plus"
+                  data-action="adjust-tries"
+                  data-user-id="${participant.userId}"
+                  data-delta="1">+</button>
+        </div>
+      </div>
+    `
         )
         .join("");
       // Wire up +/− buttons (replace any old handler)
@@ -949,7 +976,7 @@ class UIController {
       );
       if (res.success) {
         // Update the number shown in the modal
-        const disp = document.getElementById(`tries-${userId}`);
+        const disp = document.getElementById(`remaining-${userId}`);
         if (disp) disp.textContent = res.newTries;
         this.showToast(`Updated tries to ${res.newTries}`);
       } else {
