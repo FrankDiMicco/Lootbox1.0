@@ -294,6 +294,55 @@ class UIController {
 
   async openGroupBox(groupBoxId) {
     console.log("Opening group box:", groupBoxId);
+
+    if (this.lootboxController.firebase.isReady) {
+      console.log("Firebase is ready, attempting refresh...");
+      try {
+        const freshData = await this.lootboxController.firebase.loadGroupBox(
+          groupBoxId
+        );
+        console.log("Fresh data loaded:", freshData);
+
+        const currentUser = this.lootboxController.firebase.getCurrentUser();
+        console.log("Current user:", currentUser?.uid);
+
+        if (freshData && currentUser) {
+          console.log("Looking for participant in:", freshData.participants);
+          const freshParticipant = freshData.participants?.find(
+            (p) => p.userId === currentUser.uid
+          );
+          console.log("Found participant:", freshParticipant);
+
+          if (freshParticipant) {
+            const groupBox = this.groupBoxController.getGroupBox(groupBoxId);
+            console.log("Local group box before update:", groupBox);
+
+            if (groupBox) {
+              console.log(
+                "Updating from",
+                groupBox.userRemainingTries,
+                "to",
+                freshParticipant.userRemainingTries
+              );
+              groupBox.userRemainingTries = freshParticipant.userRemainingTries;
+              groupBox.userTotalOpens = freshParticipant.userTotalOpens || 0;
+              console.log("After update:", groupBox.userRemainingTries);
+            } else {
+              console.log("ERROR: groupBox is null!");
+            }
+          } else {
+            console.log("ERROR: freshParticipant not found!");
+          }
+        } else {
+          console.log("ERROR: freshData or currentUser is null!");
+        }
+      } catch (error) {
+        console.error("Error refreshing group box data:", error);
+      }
+    } else {
+      console.log("Firebase not ready!");
+    }
+
     const groupBox = this.groupBoxController.getGroupBox(groupBoxId);
     if (!groupBox) {
       // Try to check if it still exists in Firebase

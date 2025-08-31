@@ -508,7 +508,6 @@ class App {
 
   async handleSpinLootbox() {
     if (this.state.isOnCooldown) return;
-
     const lootbox = this.state.currentLootbox;
     if (!lootbox) return;
 
@@ -519,10 +518,51 @@ class App {
         return;
       }
 
-      // Check if group box still exists before spinning
+      console.log(
+        "SPIN CLICKED - Current tries before refresh:",
+        lootbox.userRemainingTries
+      );
+
+      // Check if group box still exists AND refresh tries in one call
       try {
-        await this.services.firebase.loadGroupBox(lootbox.groupBoxId);
+        const freshData = await this.services.firebase.loadGroupBox(
+          lootbox.groupBoxId
+        );
+        console.log("Fresh data loaded:", freshData);
+
+        // If we got here, the group box exists
+        const currentUser = this.services.firebase.getCurrentUser();
+        const freshParticipant = freshData?.participants?.find(
+          (p) => p.userId === currentUser?.uid
+        );
+
+        console.log("Fresh participant data:", freshParticipant);
+        console.log(
+          "Fresh tries from Firebase:",
+          freshParticipant?.userRemainingTries
+        );
+
+        if (freshParticipant) {
+          // Update local state with fresh tries
+          lootbox.userRemainingTries = freshParticipant.userRemainingTries;
+          this.state.currentLootbox.userRemainingTries =
+            freshParticipant.userRemainingTries;
+
+          // Update UI display
+          const triesEl = document.getElementById("triesInfo");
+          console.log("Tries element found:", triesEl);
+          console.log("Updating UI to:", freshParticipant.userRemainingTries);
+
+          if (triesEl) {
+            triesEl.textContent = `Tries remaining: ${freshParticipant.userRemainingTries}`;
+            console.log("UI updated, element now says:", triesEl.textContent);
+          }
+
+          this.controllers.ui.updateLootboxInteractivity();
+        }
       } catch (error) {
+        console.error("Error loading fresh data:", error);
+        // Group box doesn't exist or other error
         this.controllers.ui.showToast(
           "This group box has been deleted",
           "error"
@@ -531,6 +571,7 @@ class App {
         return;
       }
 
+      // Now continue with the spin
       const result = await this.controllers.groupBox.spinGroupBox(
         lootbox.groupBoxId
       );
@@ -540,7 +581,7 @@ class App {
         this.controllers.ui.showToast(result.errors[0], "error");
       }
     } else {
-      // Regular lootbox spin
+      // Regular lootbox spin (unchanged)
       const result = await this.controllers.lootbox.spinLootbox(
         this.state.currentLootboxIndex
       );
