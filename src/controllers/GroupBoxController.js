@@ -134,11 +134,29 @@ class GroupBoxController {
   }
 
   getAllGroupBoxes() {
-    return this.groupBoxes;
+    // return unique, non-left boxes by groupBoxId
+    const seen = new Set();
+    return this.groupBoxes.filter((gb) => {
+      if (gb.hasLeft) return false;
+      if (!gb.groupBoxId) return false;
+      if (seen.has(gb.groupBoxId)) return false;
+      seen.add(gb.groupBoxId);
+      return true;
+    });
+  }
+
+  getGroupBoxIncludingLeft(groupBoxId) {
+    // This method can find group boxes even if user has left them
+    return this.groupBoxes.find((gb) => gb.groupBoxId === groupBoxId) || null;
   }
 
   getGroupBox(groupBoxId) {
-    return this.groupBoxes.find((gb) => gb.groupBoxId === groupBoxId) || null;
+    // For normal operations, only return non-left group boxes
+    return (
+      this.groupBoxes.find(
+        (gb) => gb.groupBoxId === groupBoxId && !gb.hasLeft
+      ) || null
+    );
   }
 
   getCommunityHistory() {
@@ -212,7 +230,8 @@ class GroupBoxController {
       // If creator participates, record their join
       // If creator participates, also create a participant record for them
       if (settings.creatorParticipates) {
-        const { collection, addDoc } = window.firebaseFunctions;
+        const { setDoc, doc } = window.firebaseFunctions;
+
         const participantData = {
           groupBoxId,
           groupBoxName: lootboxData.name,
@@ -232,25 +251,26 @@ class GroupBoxController {
           favorite: false,
         };
 
-        const docRef = await addDoc(
-          collection(
+        await setDoc(
+          doc(
             this.firebase.db,
             "users",
             currentUser.uid,
-            "participated_group_boxes"
+            "participated_group_boxes",
+            groupBoxId
           ),
-          participantData
+          participantData,
+          { merge: true }
         );
 
         // Update the local group box with the document ID
-        groupBox.id = docRef.id;
-        this.groupBoxes[this.groupBoxes.length - 1].id = docRef.id;
-        // Update the GroupBox in the array with the correct id
+        groupBox.id = groupBoxId;
+        this.groupBoxes[this.groupBoxes.length - 1].id = groupBoxId;
         const index = this.groupBoxes.findIndex(
           (gb) => gb.groupBoxId === groupBoxId
         );
         if (index >= 0) {
-          this.groupBoxes[index].id = docRef.id;
+          this.groupBoxes[index].id = groupBoxId;
         }
         // Record join event for creator
         await this.firebase.addSessionHistoryEvent(groupBoxId, {
@@ -273,23 +293,92 @@ class GroupBoxController {
 
   async joinGroupBox(groupBoxId) {
     try {
-      // Check if already joined locally
-      const existing = this.groupBoxes.find(
-        (gb) => gb.groupBoxId === groupBoxId
-      );
-      if (existing) {
-        return { success: true, alreadyJoined: true, groupBox: existing };
-      }
-
-      // Load from Firebase
-      const groupBoxData = await this.firebase.loadGroupBox(groupBoxId);
-      if (!groupBoxData) {
-        return { success: false, errors: ["Group box not found"] };
-      }
-
       const currentUser = this.firebase.getCurrentUser();
       if (!currentUser) {
         return { success: false, errors: ["User not authenticated"] };
+      }
+
+      // First, check if we already have this group box in memory
+      let existing = this.groupBoxes.find((gb) => gb.groupBoxId === groupBoxId);
+
+      // Check Firebase for existing participation record
+      const { collection, query, where, getDocs, updateDoc, doc, setDoc } =
+        window.firebaseFunctions;
+      const participationQuery = query(
+        collection(
+          this.firebase.db,
+          "users",
+          currentUser.uid,
+          "participated_group_boxes"
+        ),
+        where("groupBoxId", "==", groupBoxId)
+      );
+      const participationSnapshot = await getDocs(participationQuery);
+
+      if (!participationSnapshot.empty) {
+        // User has participated before - update existing record
+        const existingDoc = participationSnapshot.docs[0];
+        const existingData = existingDoc.data();
+        const wasLeft = existingData.hasLeft === true;
+
+        // Update the participation record to mark as active
+        await updateDoc(existingDoc.ref, {
+          hasLeft: false,
+          rejoinedAt: new Date().toISOString(),
+        });
+
+        // Load fresh group box data
+        const groupBoxData = await this.firebase.loadGroupBox(groupBoxId);
+        if (!groupBoxData) {
+          return { success: false, errors: ["Group box not found"] };
+        }
+
+        // Create/update local GroupBox instance
+        const groupBox = new GroupBox({
+          id: existingDoc.id,
+          ...existingData,
+          ...groupBoxData,
+          groupBoxId: groupBoxId,
+          hasLeft: false,
+          isGroupBox: true,
+          userTotalOpens: existingData.userTotalOpens || 0,
+          userRemainingTries: existingData.userRemainingTries,
+        });
+
+        if (existing) {
+          // Update existing in array
+          const index = this.groupBoxes.findIndex(
+            (gb) => gb.groupBoxId === groupBoxId
+          );
+          if (index >= 0) {
+            this.groupBoxes[index] = groupBox;
+          }
+        } else {
+          // Add to array
+          this.groupBoxes.push(groupBox);
+        }
+
+        // Record rejoin event
+        if (wasLeft) {
+          await this.firebase.addSessionHistoryEvent(groupBoxId, {
+            type: "join",
+            userId: currentUser.uid,
+            userName: currentUser.displayName || currentUser.uid,
+            message: `${
+              currentUser.displayName || currentUser.uid
+            } joined the box`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        await this.save();
+        return { success: true, alreadyJoined: true, groupBox };
+      }
+
+      // New participant - create new record
+      const groupBoxData = await this.firebase.loadGroupBox(groupBoxId);
+      if (!groupBoxData) {
+        return { success: false, errors: ["Group box not found"] };
       }
 
       // Check if expired
@@ -300,61 +389,18 @@ class GroupBoxController {
         return { success: false, errors: ["This group box has expired"] };
       }
 
-      // Check if user already has a participation record in Firebase
-      const { collection, query, where, getDocs } = window.firebaseFunctions;
-      const participatedRef = collection(
-        this.firebase.db,
-        "users",
-        currentUser.uid,
-        "participated_group_boxes"
-      );
+      // Add to participants array
+      const newParticipant = {
+        userId: currentUser.uid,
+        userName: currentUser.displayName || currentUser.uid,
+        userTotalOpens: 0,
+        userRemainingTries: groupBoxData.settings?.triesPerPerson || 3,
+        joinedAt: new Date().toISOString(),
+      };
 
-      // Query for existing participation in this specific group box
-      const q = query(participatedRef, where("groupBoxId", "==", groupBoxId));
-      const querySnapshot = await getDocs(q);
+      await this.firebase.updateGroupBoxParticipant(groupBoxId, newParticipant);
 
-      if (!querySnapshot.empty) {
-        // User already participated before - restore their existing record
-        const existingDoc = querySnapshot.docs[0];
-        const existingData = existingDoc.data();
-
-        console.log(
-          `Restoring existing participation: ${existingData.userRemainingTries} tries left`
-        );
-
-        // Create GroupBox from existing data
-        const groupBox = new GroupBox({
-          ...existingData,
-          id: existingDoc.id,
-          isGroupBox: true,
-        });
-
-        this.groupBoxes.push(groupBox);
-        await this.save();
-
-        // Record rejoin event
-        await this.firebase.addSessionHistoryEvent(groupBoxId, {
-          type: "join",
-          userId: currentUser.uid,
-          userName: currentUser.uid,
-          message: `User ${currentUser.uid} rejoined the box`,
-          timestamp: new Date().toISOString(),
-        });
-
-        return {
-          success: true,
-          alreadyJoined: false,
-          groupBox,
-          message: `Rejoined with ${existingData.userRemainingTries} tries remaining`,
-        };
-      }
-
-      // New participant - create fresh participation record
-      console.log(
-        "Setting tries for new participant:",
-        groupBoxData.settings?.triesPerPerson
-      );
-
+      // Create participation record
       const participantData = {
         groupBoxId,
         groupBoxName: groupBoxData.lootboxData?.name || "Unnamed Group Box",
@@ -369,40 +415,105 @@ class GroupBoxController {
         userRemainingTries: groupBoxData.settings?.triesPerPerson || 3,
         isCreator: groupBoxData.createdBy === currentUser.uid,
         isOrganizerOnly: false,
+        hasLeft: false,
         favorite: false,
       };
 
-      // Save to user's participated collection
-      const { addDoc } = window.firebaseFunctions;
-      const docRef = await addDoc(
-        collection(
+      await setDoc(
+        doc(
           this.firebase.db,
           "users",
           currentUser.uid,
-          "participated_group_boxes"
+          "participated_group_boxes",
+          groupBoxId // <- fixed, deterministic id
         ),
-        participantData
+        participantData,
+        { merge: true }
       );
 
-      // Record join event in session history
+      participantData.id = groupBoxId; // keep local id fixed
+
+      // add or replace in memory (no duplicates)
+      const existingIndex = this.groupBoxes.findIndex(
+        (gb) => gb.groupBoxId === groupBoxId
+      );
+      const groupBox = new GroupBox(participantData);
+      if (existingIndex >= 0) {
+        this.groupBoxes[existingIndex] = groupBox;
+      } else {
+        this.groupBoxes.push(groupBox);
+      }
+      await this.save();
+
+      // Record join event
       await this.firebase.addSessionHistoryEvent(groupBoxId, {
         type: "join",
         userId: currentUser.uid,
-        userName: currentUser.uid,
-        message: `User ${currentUser.uid} joined the box`,
+        userName: currentUser.displayName || currentUser.uid,
+        message: `${currentUser.displayName || currentUser.uid} joined the box`,
         timestamp: new Date().toISOString(),
       });
-
-      participantData.id = docRef.id;
-
-      const groupBox = new GroupBox(participantData);
-      this.groupBoxes.push(groupBox);
-      await this.save();
 
       return { success: true, alreadyJoined: false, groupBox };
     } catch (error) {
       console.error("Error joining group box:", error);
       return { success: false, errors: [error.message] };
+    }
+  }
+  async adjustUserTries(groupBoxId, userId, delta) {
+    try {
+      if (!this.firebase.isReady) {
+        return { success: false, error: "Firebase not available" };
+      }
+
+      // Load the current group box data
+      const groupBoxData = await this.firebase.loadGroupBox(groupBoxId);
+      if (!groupBoxData) {
+        return { success: false, error: "Group box not found" };
+      }
+
+      // Find the participant
+      const participants = groupBoxData.participants || [];
+      const participantIndex = participants.findIndex(
+        (p) => p.userId === userId
+      );
+
+      if (participantIndex === -1) {
+        return { success: false, error: "Participant not found" };
+      }
+
+      // Calculate new tries value
+      const currentTries =
+        participants[participantIndex].userRemainingTries || 0;
+      const newTries = Math.max(0, currentTries + delta); // Prevent negative tries
+
+      // Update the participant's tries
+      participants[participantIndex].userRemainingTries = newTries;
+
+      // Save to Firebase
+      const { updateDoc, doc } = window.firebaseFunctions;
+      await updateDoc(doc(this.firebase.db, "group_boxes", groupBoxId), {
+        participants: participants,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Also update the user's personal participation record if they have one
+      const currentUser = this.firebase.getCurrentUser();
+      if (currentUser && userId === currentUser.uid) {
+        // Find the local group box
+        const localGroupBox = this.groupBoxes.find(
+          (gb) => gb.groupBoxId === groupBoxId
+        );
+        if (localGroupBox) {
+          localGroupBox.userRemainingTries = newTries;
+          await this.save();
+        }
+      }
+
+      return { success: true, newTries };
+    } catch (error) {
+      console.error("Error adjusting user tries:", error);
+      return { success: false, error: error.message };
     }
   }
 

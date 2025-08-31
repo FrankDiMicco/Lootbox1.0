@@ -12,36 +12,31 @@ class LootboxController {
   async initialize() {
     try {
       console.log("Initializing LootboxController...");
-      // Only use Firebase if available, otherwise use localStorage
+
       if (this.firebase.isReady) {
+        console.log("Syncing any offline lootboxes first...");
+        await this.syncLocalToFirebase(); // migrate drafts to Firebase
+
         console.log("Loading lootboxes from Firebase...");
         const firebaseLootboxes = await this.firebase.loadLootboxes();
-        // Convert to Lootbox instances
-        this.lootboxes = firebaseLootboxes.map((data) => {
-          if (data instanceof Lootbox) {
-            return data;
-          }
-          return new Lootbox(data);
-        });
-        console.log(`Loaded ${this.lootboxes.length} lootboxes from Firebase`);
-        // Clear localStorage to prevent duplicates
+        this.lootboxes = firebaseLootboxes.map((data) =>
+          data instanceof Lootbox ? data : new Lootbox(data)
+        );
+
+        // cloud is source of truth now; clear local backup
         this.storage.remove("lootboxes");
       } else {
         console.log("Firebase not available, loading from localStorage...");
         const storageLootboxes = this.storage.loadLootboxes();
-        // Convert to Lootbox instances
-        this.lootboxes = storageLootboxes.map((data) => {
-          if (data instanceof Lootbox) {
-            return data;
-          }
-          return new Lootbox(data);
-        });
+        this.lootboxes = storageLootboxes.map((data) =>
+          data instanceof Lootbox ? data : new Lootbox(data)
+        );
         console.log(
           `Loaded ${this.lootboxes.length} lootboxes from localStorage`
         );
       }
 
-      // Fix chest paths - THIS GOES HERE, INSIDE THE TRY BLOCK
+      // Fix chest paths
       const fixedCount = await ChestImageHelper.fixAllChestPaths(
         this.lootboxes
       );
@@ -77,6 +72,10 @@ class LootboxController {
   }
 
   getAllLootboxes() {
+    // When Firebase is ready, hide local-only drafts (no Firestore id)
+    if (this.firebase.isReady) {
+      return this.lootboxes.filter((lb) => !!lb.id);
+    }
     return this.lootboxes;
   }
 

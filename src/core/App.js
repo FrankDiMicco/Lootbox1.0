@@ -14,6 +14,8 @@ class App {
       firebase: null,
     };
 
+    this.handleAdjustTries = this.handleAdjustTries.bind(this);
+
     // Controllers
     this.controllers = {
       lootbox: null,
@@ -334,6 +336,9 @@ class App {
           await this.controllers.groupBox.toggleGroupBoxFavorite(data.id);
           this.controllers.ui.render();
           break;
+        case "adjust-tries":
+          await this.handleAdjustTries(data);
+          break;
 
         case "edit-group-box":
           console.log("About to call showEditGroupBoxModal with:", data.id);
@@ -441,6 +446,43 @@ class App {
       const errorMessage =
         error?.message || error?.toString() || "Unknown error";
       this.controllers.ui.showToast(`Error: ${errorMessage}`, "error");
+    }
+  }
+  async handleAdjustTries(data) {
+    const groupBoxId = this.state.currentEditGroupBoxId;
+    const userId = data.userId;
+    const delta = parseInt(data.delta);
+
+    if (!groupBoxId || !userId) {
+      console.error("Missing groupBoxId or userId for tries adjustment");
+      return;
+    }
+
+    try {
+      // Update in Firebase
+      const result = await this.controllers.groupBox.adjustUserTries(
+        groupBoxId,
+        userId,
+        delta
+      );
+
+      if (result.success) {
+        // Update the display
+        const triesDisplay = document.getElementById(`tries-${userId}`);
+        if (triesDisplay) {
+          triesDisplay.textContent = result.newTries;
+        }
+
+        this.controllers.ui.showToast(`Updated tries for user`);
+      } else {
+        this.controllers.ui.showToast(
+          result.error || "Failed to update tries",
+          "error"
+        );
+      }
+    } catch (error) {
+      console.error("Error adjusting tries:", error);
+      this.controllers.ui.showToast("Failed to adjust tries", "error");
     }
   }
 

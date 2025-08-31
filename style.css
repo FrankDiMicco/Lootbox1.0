@@ -1730,3 +1730,65 @@ body {
     color: #1d4ed8;
     font-weight: 600;
 }
+.edit-user-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 8px;
+}
+
+.creator-badge {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-left: 8px;
+}
+
+.tries-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #f8fafc;
+    padding: 6px;
+    border-radius: 8px;
+}
+
+.tries-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.tries-btn:hover {
+    background: #f1f5f9;
+    transform: scale(1.1);
+}
+
+.tries-btn.minus {
+    color: #ef4444;
+}
+
+.tries-btn.plus {
+    color: #10b981;
+}
+
+.tries-display {
+    min-width: 30px;
+    text-align: center;
+    font-weight: 600;
+    color: #1e293b;
+}

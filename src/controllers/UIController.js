@@ -23,45 +23,32 @@ class UIController {
     console.log("Rendering list view");
     const grid = document.getElementById("lootboxGrid");
     const emptyState = document.getElementById("emptyState");
-
     if (!grid) {
       console.error("lootboxGrid element not found");
       return;
     }
 
     const lootboxes = this.lootboxController.getAllLootboxes();
-    const groupBoxes = this.groupBoxController.getAllGroupBoxes();
+    const allGroupBoxes = this.groupBoxController.getAllGroupBoxes();
+    const groupBoxes = allGroupBoxes.filter((gb) => !gb.hasLeft);
 
-    console.log("Raw lootboxes from controller:", lootboxes);
-    console.log("Raw groupBoxes from controller:", groupBoxes);
+    // helper: find the real index in the controller's backing array
+    const getTrueIndex = (lb) => {
+      const all = this.lootboxController.lootboxes || [];
+      if (lb && lb.id) return all.findIndex((x) => x && x.id === lb.id);
+      return all.indexOf(lb);
+    };
 
-    // Log the first lootbox to see its structure
-    if (lootboxes.length > 0) {
-      console.log("First lootbox object:", lootboxes[0]);
-      console.log("First lootbox properties:", {
-        name: lootboxes[0].name,
-        spins: lootboxes[0].spins,
-        chestImage: lootboxes[0].chestImage,
-        items: lootboxes[0].items,
-        hasToObject: typeof lootboxes[0].toObject === "function",
-      });
-      if (typeof lootboxes[0].toObject === "function") {
-        console.log("First lootbox toObject():", lootboxes[0].toObject());
-      }
-    }
-
-    // Combine and filter
     let allItems = [];
 
     if (this.state.currentFilter === "all") {
       allItems = [
-        ...lootboxes.map((lb, idx) => {
-          // Get the data - if the model has toObject use it, otherwise use the object directly
+        // LOOTBOXES (use true index)
+        ...lootboxes.map((lb) => {
           let data;
           if (typeof lb.toObject === "function") {
             data = lb.toObject();
           } else {
-            // If no toObject method, use the instance properties directly
             data = {
               id: lb.id,
               name: lb.name,
@@ -80,20 +67,15 @@ class UIController {
               updatedAt: lb.updatedAt,
             };
           }
-          console.log(`Lootbox ${idx} data:`, data);
-          return {
-            type: "lootbox",
-            data: data,
-            index: idx,
-          };
+          const trueIndex = getTrueIndex(lb);
+          return { type: "lootbox", data, index: trueIndex };
         }),
+        // GROUP BOXES (unchanged)
         ...groupBoxes.map((gb) => {
-          // Get the data - if the model has toObject use it, otherwise use the object directly
           let data;
           if (typeof gb.toObject === "function") {
             data = gb.toObject();
           } else {
-            // If no toObject method, use the instance properties directly
             data = {
               id: gb.id,
               groupBoxId: gb.groupBoxId,
@@ -116,10 +98,7 @@ class UIController {
               revealOdds: gb.revealOdds,
             };
           }
-          return {
-            type: "groupbox",
-            data: data,
-          };
+          return { type: "groupbox", data };
         }),
       ];
     } else if (this.state.currentFilter === "shared") {
@@ -131,10 +110,10 @@ class UIController {
       allItems = [
         ...lootboxes
           .filter((lb) => lb.favorite)
-          .map((lb, idx) => ({
+          .map((lb) => ({
             type: "lootbox",
             data: lb.toObject ? lb.toObject() : lb,
-            index: idx,
+            index: getTrueIndex(lb),
           })),
         ...groupBoxes
           .filter((gb) => gb.favorite)
@@ -147,10 +126,10 @@ class UIController {
       allItems = [
         ...lootboxes
           .filter((lb) => (lb.spins || 0) === 0)
-          .map((lb, idx) => ({
+          .map((lb) => ({
             type: "lootbox",
             data: lb.toObject ? lb.toObject() : lb,
-            index: idx,
+            index: getTrueIndex(lb),
           })),
         ...groupBoxes
           .filter((gb) => (gb.userTotalOpens || 0) === 0 && !gb.isOrganizerOnly)
@@ -161,10 +140,8 @@ class UIController {
       ];
     }
 
-    // Sort items: new boxes first (spins/opens = 0), then by recent usage
+    // Sort items
     allItems.sort(this.sortItemsByUsage);
-
-    console.log("Sorted items to render:", allItems);
 
     if (allItems.length === 0) {
       grid.style.display = "none";
@@ -172,7 +149,6 @@ class UIController {
     } else {
       grid.style.display = "grid";
       emptyState.classList.add("hidden");
-
       grid.innerHTML = allItems
         .map((item) => {
           if (item.type === "groupbox") {
@@ -184,10 +160,8 @@ class UIController {
         .join("");
     }
 
-    // Make sure we're showing the list view
     const lootboxView = document.getElementById("lootboxView");
     const listView = document.getElementById("listView");
-
     if (lootboxView) lootboxView.classList.add("hidden");
     if (listView) listView.classList.remove("hidden");
   }
@@ -300,20 +274,22 @@ class UIController {
     this.render();
   }
 
-  async openLootbox(index) {
-    console.log("Opening lootbox at index:", index);
-    const lootbox = this.lootboxController.getLootbox(index);
-    if (lootbox) {
-      // Mark the lootbox as viewed to remove the "NEW" badge
-      await this.lootboxController.markAsViewed(index);
-
-      this.state.currentView = "lootbox";
-      this.state.currentLootbox = lootbox;
-      this.state.currentLootboxIndex = index;
-      this.render();
-    } else {
-      console.error("Lootbox not found at index:", index);
+  async openLootbox(controllerIndex) {
+    console.log("Opening lootbox (controller index):", controllerIndex);
+    const lootbox = this.lootboxController.getLootbox(controllerIndex);
+    if (!lootbox) {
+      console.error("No lootbox at index:", controllerIndex);
+      return;
     }
+
+    // Mark viewed
+    await this.lootboxController.markAsViewed(controllerIndex);
+
+    // Show it
+    this.state.currentView = "lootbox";
+    this.state.currentLootbox = lootbox;
+    this.state.currentLootboxIndex = controllerIndex;
+    this.render();
   }
 
   async openGroupBox(groupBoxId) {
@@ -883,21 +859,105 @@ class UIController {
         return;
       }
 
-      // For now, show placeholder since full participant management needs more setup
-      usersList.innerHTML = `
-            <div class="edit-user-row">
-                <div class="edit-user-info">
-                    <div class="edit-user-name">Participant management coming soon</div>
-                    <div class="edit-user-stats">
-                        <span>This feature requires additional Firebase setup</span>
+      const groupBoxData = await this.lootboxController.firebase.loadGroupBox(
+        groupBoxId
+      );
+      if (!groupBoxData) {
+        usersList.innerHTML =
+          '<div class="no-participants">Group box not found</div>';
+        return;
+      }
+
+      const participants = groupBoxData.participants || [];
+
+      if (participants.length === 0) {
+        usersList.innerHTML = `
+                <div class="edit-user-row">
+                    <div class="edit-user-info">
+                        <div class="edit-user-name">No participants yet</div>
+                        <div class="edit-user-stats">
+                            <span>Share the group box link to invite participants</span>
+                        </div>
                     </div>
                 </div>
+            `;
+        return;
+      }
+
+      // Render participants with interactive controls
+      usersList.innerHTML = participants
+        .map(
+          (participant) => `
+            <div class="edit-user-row" data-user-id="${participant.userId}">
+                <div class="edit-user-info">
+                    <div class="edit-user-name">
+                        ${this.escapeHtml(participant.userName)}
+                        ${
+                          participant.userId === groupBoxData.createdBy
+                            ? '<span class="creator-badge">Creator</span>'
+                            : ""
+                        }
+                    </div>
+                    <div class="edit-user-stats">
+                        <span>Opens: ${participant.userTotalOpens || 0}</span>
+                    </div>
+                </div>
+                <div class="tries-control">
+                    <button class="tries-btn minus" data-action="adjust-tries" data-user-id="${
+                      participant.userId
+                    }" data-delta="-1">−</button>
+                    <div class="tries-display" id="tries-${
+                      participant.userId
+                    }">${participant.userRemainingTries || 0}</div>
+                    <button class="tries-btn plus" data-action="adjust-tries" data-user-id="${
+                      participant.userId
+                    }" data-delta="1">+</button>
+                </div>
             </div>
-        `;
+        `
+        )
+        .join("");
+      // Wire up +/− buttons (replace any old handler)
+      usersList.onclick = async (e) => {
+        const btn = e.target.closest('[data-action="adjust-tries"]');
+        if (!btn) return;
+
+        const userId = btn.dataset.userId;
+        const delta = parseInt(btn.dataset.delta, 10);
+        const gbId = this.state.currentEditGroupBoxId || groupBoxId;
+
+        btn.disabled = true;
+        try {
+          await this.adjustUserTries(userId, gbId, delta);
+        } finally {
+          btn.disabled = false;
+        }
+      };
     } catch (error) {
       console.error("Error loading participants:", error);
       usersList.innerHTML =
         '<div class="no-participants">Error loading participants</div>';
+    }
+  }
+
+  async adjustUserTries(userId, groupBoxId, delta) {
+    try {
+      const res = await this.groupBoxController.adjustUserTries(
+        groupBoxId,
+        userId,
+        parseInt(delta, 10)
+      );
+      if (res.success) {
+        // Update the number shown in the modal
+        const disp = document.getElementById(`tries-${userId}`);
+        if (disp) disp.textContent = res.newTries;
+        this.showToast(`Updated tries to ${res.newTries}`);
+      } else {
+        this.showToast(res.error || "Failed to adjust tries", "error");
+      }
+    } catch (error) {
+      console.error("Error adjusting user tries:", error);
+      this.showToast("Failed to adjust tries", "error");
     }
   }
 

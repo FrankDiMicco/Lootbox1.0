@@ -18,6 +18,7 @@ import {
   orderBy,
   limit,
   serverTimestamp,
+  arrayUnion,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
 class FirebaseService {
@@ -63,6 +64,7 @@ class FirebaseService {
         orderBy,
         limit,
         serverTimestamp,
+        arrayUnion,
       };
 
       // Sign in anonymously and perform smoke test
@@ -171,14 +173,36 @@ class FirebaseService {
       throw new Error("Firebase not ready");
     }
 
-    const docRef = doc(this.db, "group_boxes", id);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() };
-    } else {
+    const boxRef = doc(this.db, "group_boxes", id);
+    const boxSnap = await getDoc(boxRef);
+    if (!boxSnap.exists()) {
       throw new Error("Group box not found");
     }
+
+    const data = { id: boxSnap.id, ...boxSnap.data() };
+
+    // DO NOT log "join" here.
+    // If the user is already participating, just bump lastSeenAt (no new record).
+    const user = this.getCurrentUser();
+    if (user) {
+      const partRef = doc(
+        this.db,
+        "users",
+        user.uid,
+        "participated_group_boxes",
+        id
+      );
+      const partSnap = await getDoc(partRef);
+      if (partSnap.exists()) {
+        await setDoc(
+          partRef,
+          { lastSeenAt: serverTimestamp() },
+          { merge: true }
+        );
+      }
+    }
+
+    return data;
   }
 
   async recordSpin(lootboxId, result) {
@@ -220,7 +244,12 @@ class FirebaseService {
     for (const docSnap of participatedSnapshot.docs) {
       const data = docSnap.data();
 
-      // Check if the group box still exists in the main collection
+      // SKIP if user hid or left this box
+      if (data.hiddenByUser === true || data.hasLeft === true) {
+        continue;
+      }
+
+      // Check if the group box still exists
       let groupBoxExists = true;
       try {
         const groupBoxRef = doc(this.db, "group_boxes", data.groupBoxId);
@@ -228,6 +257,37 @@ class FirebaseService {
         groupBoxExists = groupBoxSnap.exists();
       } catch (error) {
         groupBoxExists = false;
+      }
+
+      if (groupBoxExists) {
+        // Add once (NO duplicates)
+        participatedBoxes.push({
+          id: docSnap.id,
+          ...data,
+          isGroupBox: true,
+        });
+      } else {
+        // Clean up dead participation record
+        console.log(
+          `Group box ${data.groupBoxId} no longer exists, cleaning up participation record`
+        );
+        toDelete.push(docSnap.id);
+      }
+
+      if (groupBoxExists) {
+        // Add the box regardless of hasLeft status - we want to keep boxes the user left
+        // so they can rejoin them later
+        participatedBoxes.push({
+          id: docSnap.id,
+          ...data,
+          isGroupBox: true,
+        });
+      } else {
+        // Group box was deleted, so clean up this participation record
+        console.log(
+          `Group box ${data.groupBoxId} no longer exists, cleaning up participation record`
+        );
+        toDelete.push(docSnap.id);
       }
 
       if (groupBoxExists) {
@@ -402,6 +462,10 @@ class FirebaseService {
       ];
     }
   }
+  // Alias for UIController compatibility
+  async loadAvailableChests() {
+    return this.loadChestManifest();
+  }
 
   // Shared session history methods for group boxes
   async addSessionHistoryEvent(groupBoxId, eventData) {
@@ -437,6 +501,40 @@ class FirebaseService {
       console.error("Error adding session history event:", error);
       return false;
     }
+  }
+  async updateGroupBoxParticipant(groupBoxId, participantData) {
+    if (!this.isReady) throw new Error("Firebase not ready");
+
+    const { getDoc, updateDoc, doc } = window.firebaseFunctions;
+
+    // Get current participants
+    const groupBoxRef = doc(this.db, "group_boxes", groupBoxId);
+    const groupBoxSnap = await getDoc(groupBoxRef);
+    const groupBoxData = groupBoxSnap.data();
+
+    const participants = groupBoxData.participants || [];
+
+    // Check if participant already exists
+    const existingIndex = participants.findIndex(
+      (p) => p.userId === participantData.userId
+    );
+
+    if (existingIndex >= 0) {
+      // Update existing participant
+      participants[existingIndex] = {
+        ...participants[existingIndex],
+        ...participantData,
+      };
+    } else {
+      // Add new participant
+      participants.push(participantData);
+    }
+
+    // Update the group box
+    await updateDoc(groupBoxRef, {
+      participants: participants,
+      uniqueUsers: participants.length,
+    });
   }
 
   async getSessionHistory(groupBoxId) {
@@ -485,6 +583,60 @@ class FirebaseService {
     } catch (error) {
       console.error("Error loading session history:", error);
       return [];
+    }
+  }
+  // Record a "join" event in a group box
+  static async logGroupJoin(db, groupBoxId, uid, userName) {
+    const colRef = collection(
+      doc(db, "group_boxes", groupBoxId),
+      "session_history"
+    );
+    await addDoc(colRef, {
+      type: "join",
+      userId: uid,
+      userName: userName || "Unknown",
+      timestamp: serverTimestamp(),
+    });
+  }
+  // Hide a participated group box for the current user and log a "leave"
+  async hideParticipatedGroupBox(groupBoxId) {
+    if (!this.isReady || !this.getCurrentUser()) return false;
+
+    try {
+      const user = this.getCurrentUser();
+
+      // 1) mark it hidden (and mark as left)
+      await setDoc(
+        doc(this.db, "users", user.uid, "participated_group_boxes", groupBoxId),
+        {
+          groupBoxId,
+          hiddenByUser: true,
+          hasLeft: true,
+          lastSeenAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      // 2) log a "leave" event in session_history (best effort)
+      try {
+        await addDoc(
+          collection(this.db, "group_boxes", groupBoxId, "session_history"),
+          {
+            type: "leave",
+            userId: user.uid,
+            userName: user.displayName || "Unknown",
+            timestamp: serverTimestamp(),
+            createdAt: new Date().toISOString(),
+          }
+        );
+      } catch (e) {
+        console.warn("Could not write leave event (non-blocking):", e);
+      }
+
+      return true;
+    } catch (e) {
+      console.error("hideParticipatedGroupBox failed:", e);
+      return false;
     }
   }
 }
