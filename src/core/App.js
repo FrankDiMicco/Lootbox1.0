@@ -835,8 +835,16 @@ class App {
       if (groupBox && !groupBox.viewed) {
         // Mark it as viewed
         groupBox.viewed = true;
-        // Save to local storage
-        await this.controllers.groupBox.saveToLocal();
+        
+        // Save to Firebase if available
+        if (this.controllers.groupBox.firebase && this.controllers.groupBox.firebase.isReady) {
+          await this.controllers.groupBox.updateParticipantData(groupBoxId, {
+            viewed: true
+          });
+        }
+        
+        // Also save to local storage
+        await this.controllers.groupBox.save();
         // Force re-render to update the UI
         this.controllers.ui.render();
       }
@@ -852,8 +860,16 @@ class App {
       if (groupBox) {
         // Set lastInteracted timestamp
         groupBox.lastInteracted = new Date().toISOString();
-        // Save to local storage
-        await this.controllers.groupBox.saveToLocal();
+        
+        // Save to Firebase if available
+        if (this.controllers.groupBox.firebase && this.controllers.groupBox.firebase.isReady) {
+          await this.controllers.groupBox.updateParticipantData(groupBoxId, {
+            lastInteracted: groupBox.lastInteracted
+          });
+        }
+        
+        // Also save to local storage
+        await this.controllers.groupBox.save();
       }
     } catch (error) {
       console.error("Error setting group box last interacted:", error);

@@ -987,6 +987,44 @@ class GroupBoxController {
       console.error("Error saving group boxes:", error);
     }
   }
+
+  async updateParticipantData(groupBoxId, updates) {
+    try {
+      if (!this.firebase || !this.firebase.isReady) {
+        console.log("Firebase not ready, skipping participant data update");
+        return { success: false };
+      }
+
+      const currentUser = this.firebase.getCurrentUser();
+      if (!currentUser) {
+        console.log("No current user, skipping participant data update");
+        return { success: false };
+      }
+
+      const { setDoc, doc } = window.firebaseFunctions;
+      
+      // Update the participant record in Firebase
+      await setDoc(
+        doc(
+          this.firebase.db,
+          "users",
+          currentUser.uid,
+          "participated_group_boxes",
+          groupBoxId
+        ),
+        {
+          ...updates,
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error updating participant data:", error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 export default GroupBoxController;
