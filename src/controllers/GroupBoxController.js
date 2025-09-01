@@ -81,7 +81,7 @@ class GroupBoxController {
 
             // Other properties
             favorite: data.favorite || false,
-            expiresIn: data.settings?.expiresIn || "never",
+            expiresIn: data.expiresIn || data.settings?.expiresIn || "never",
             expiresAt: data.expiresAt,
             participants: data.participants || [],
             maxParticipants: data.maxParticipants,
@@ -269,6 +269,8 @@ class GroupBoxController {
           groupBoxName: lootboxData.name,
           lootboxData: groupBoxData.lootboxData,
           settings: groupBoxData.settings,
+          expiresAt: groupBoxData.expiresAt || null,
+          expiresIn: settings.expiresIn || "never",
           createdBy: currentUser.uid,
           creatorName: currentUser.displayName || "Anonymous",
           totalOpens: 0,
@@ -456,6 +458,8 @@ class GroupBoxController {
         groupBoxName: groupBoxData.lootboxData?.name || "Unnamed Group Box",
         lootboxData: groupBoxData.lootboxData,
         settings: groupBoxData.settings,
+        expiresAt: groupBoxData.expiresAt || null,
+        expiresIn: groupBoxData.settings?.expiresIn || "never",
         createdBy: groupBoxData.createdBy,
         creatorName: groupBoxData.creatorName,
         totalOpens: groupBoxData.totalOpens || 0,

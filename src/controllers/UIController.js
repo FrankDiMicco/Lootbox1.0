@@ -364,6 +364,15 @@ class UIController {
               );
               groupBox.userRemainingTries = freshParticipant.userRemainingTries;
               groupBox.userTotalOpens = freshParticipant.userTotalOpens || 0;
+              
+              // Also update expiration data from main group box data
+              if (freshData.expiresAt !== undefined) {
+                groupBox.expiresAt = freshData.expiresAt;
+              }
+              if (freshData.settings && freshData.settings.expiresIn !== undefined) {
+                groupBox.expiresIn = freshData.settings.expiresIn;
+              }
+              
               console.log("After update:", groupBox.userRemainingTries);
             } else {
               console.log("ERROR: groupBox is null!");
