@@ -841,6 +841,9 @@ class GroupBoxController {
               userTotalOpens: groupBox.userTotalOpens,
             }
           );
+
+          groupBox.hasLeft = true;
+
           console.log(
             `Marked participation as left, preserving ${groupBox.userRemainingTries} remaining tries`
           );
