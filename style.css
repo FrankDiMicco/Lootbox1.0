@@ -190,9 +190,16 @@ html:has(body.modal-open) {
 .lootbox-stats {
     display: flex;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
     font-size: 14px;
     color: #272d34;
     margin-bottom: 15px;
+}
+
+.lootbox-stats .expired-text {
+    color: #dc2626;
+    font-weight: 600;
 }
 
 .lootbox-actions {

@@ -80,17 +80,19 @@ class GroupBoxCard {
    */
   static renderStats(groupBox) {
     const userOpens = groupBox.userTotalOpens || 0;
+    const expirationInfo = this.getExpirationInfo(groupBox);
 
     if (groupBox.isOrganizerOnly) {
-      // For organizer-only mode, only show creator status
+      // For organizer-only mode, show creator status and expiration
       return `
                 <div class="lootbox-stats">
                     <span>Status: Creator</span>
                     <span>Organizer Mode</span>
+                    <span class="${expirationInfo.isExpired ? 'expired-text' : ''}">${expirationInfo.displayText}</span>
                 </div>
             `;
     } else {
-      // For regular participants, show opens and tries
+      // For regular participants, show opens, tries, and expiration
       const triesLeft = `Tries Left: ${
         groupBox.userRemainingTries !== undefined
           ? groupBox.userRemainingTries
@@ -100,6 +102,7 @@ class GroupBoxCard {
                 <div class="lootbox-stats">
                     <span>Your Opens: ${userOpens}</span>
                     <span>${triesLeft}</span>
+                    <span class="${expirationInfo.isExpired ? 'expired-text' : ''}">${expirationInfo.displayText}</span>
                 </div>
             `;
     }
@@ -267,26 +270,51 @@ class GroupBoxCard {
    */
   static getExpirationInfo(groupBox) {
     if (!groupBox.expiresAt || groupBox.expiresIn === "never") {
-      return { showWarning: false, isExpired: false, label: "" };
+      return { showWarning: false, isExpired: false, label: "", displayText: "Never expires" };
     }
 
     const expiresAt = new Date(groupBox.expiresAt);
     const now = new Date();
     const timeUntilExpiry = expiresAt - now;
     const hoursUntilExpiry = timeUntilExpiry / (1000 * 60 * 60);
+    const daysUntilExpiry = timeUntilExpiry / (1000 * 60 * 60 * 24);
 
     if (timeUntilExpiry <= 0) {
-      return { showWarning: true, isExpired: true, label: "Expired" };
+      return { showWarning: true, isExpired: true, label: "Expired", displayText: "Expired" };
     } else if (hoursUntilExpiry <= 24) {
       const hours = Math.floor(hoursUntilExpiry);
+      const minutes = Math.floor((timeUntilExpiry % (1000 * 60 * 60)) / (1000 * 60));
+      let displayText;
+      if (hours > 0) {
+        displayText = `Expires in ${hours}h ${minutes}m`;
+      } else {
+        displayText = `Expires in ${minutes}m`;
+      }
       return {
         showWarning: true,
         isExpired: false,
         label: hours <= 1 ? "Expiring Soon" : `${hours}h left`,
+        displayText: displayText
+      };
+    } else if (daysUntilExpiry <= 7) {
+      const days = Math.floor(daysUntilExpiry);
+      const hours = Math.floor((timeUntilExpiry % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      return { 
+        showWarning: false, 
+        isExpired: false, 
+        label: "",
+        displayText: days === 1 ? `Expires in ${days} day` : `Expires in ${days} days`
+      };
+    } else {
+      // More than 7 days - show date
+      const options = { month: 'short', day: 'numeric', year: 'numeric' };
+      return { 
+        showWarning: false, 
+        isExpired: false, 
+        label: "",
+        displayText: `Expires ${expiresAt.toLocaleDateString(undefined, options)}`
       };
     }
-
-    return { showWarning: false, isExpired: false, label: "" };
   }
 
   /**

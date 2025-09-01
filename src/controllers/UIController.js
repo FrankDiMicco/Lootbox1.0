@@ -130,6 +130,8 @@ class UIController {
               favorite: gb.favorite,
               revealContents: gb.revealContents,
               revealOdds: gb.revealOdds,
+              expiresIn: gb.expiresIn,
+              expiresAt: gb.expiresAt,
             };
           }
           return { type: "groupbox", data };
