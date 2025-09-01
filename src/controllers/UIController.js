@@ -607,15 +607,20 @@ class UIController {
         .join("");
     }
 
-    // Update total pulls - ONLY count actual spins, not joins/leaves
+    // Update total pulls
     const totalPullsEl = document.getElementById("totalPulls");
     if (totalPullsEl) {
       if (this.state.currentLootbox?.isGroupBox) {
-        // For group boxes, only count 'spin' events
-        const actualPulls = history.filter(
-          (entry) => entry.type === "spin"
-        ).length;
-        totalPullsEl.textContent = actualPulls;
+        // First try to use the totalSpins from the group box itself
+        if (this.state.currentLootbox.totalSpins !== undefined) {
+          totalPullsEl.textContent = this.state.currentLootbox.totalSpins;
+        } else {
+          // Fall back to counting from visible history
+          const actualPulls = history.filter(
+            (entry) => entry.type === "spin"
+          ).length;
+          totalPullsEl.textContent = actualPulls + "+"; // Add + to show there might be more
+        }
       } else {
         // For regular lootboxes, all entries are pulls
         totalPullsEl.textContent = history.length;

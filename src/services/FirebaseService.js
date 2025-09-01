@@ -571,7 +571,7 @@ class FirebaseService {
         "session_history"
       );
       // Get last 100 events, ordered by timestamp descending
-      const q = query(historyRef, orderBy("timestamp", "desc"), limit(10));
+      const q = query(historyRef, orderBy("timestamp", "desc"), limit(50));
       const querySnapshot = await getDocs(q);
 
       const history = [];

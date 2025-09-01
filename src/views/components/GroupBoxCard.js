@@ -127,7 +127,15 @@ class GroupBoxCard {
    * @returns {Object} Calculated statistics
    */
   static calculateCommunityStats(groupBox) {
-    // Get community history from the app
+    // If we have a totalSpins counter from Firebase, use that
+    if (groupBox.totalSpins !== undefined) {
+      return {
+        uniqueUsers: groupBox.uniqueUsers || 0,
+        totalOpens: groupBox.totalSpins || 0,
+      };
+    }
+
+    // Otherwise fall back to counting from history (for older group boxes)
     const communityHistory =
       window.app?.communityHistory ||
       window.modernApp?.communityHistory ||
@@ -135,12 +143,10 @@ class GroupBoxCard {
       window.modernApp?.groupBoxController?.getCommunityHistory?.() ||
       [];
 
-    // Count unique users who have SPUN (not just joined)
     const uniqueUserIds = new Set();
     let totalOpens = 0;
 
     for (const entry of communityHistory) {
-      // Only count spin events, not joins/leaves
       if (entry.type === "spin" && entry.userId) {
         uniqueUserIds.add(entry.userId);
         totalOpens++;
