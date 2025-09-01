@@ -282,6 +282,8 @@ class UIController {
       return;
     }
 
+    this.state.isOrganizerReadonly = false;
+
     // Mark viewed
     await this.lootboxController.markAsViewed(controllerIndex);
 
