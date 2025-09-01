@@ -290,7 +290,10 @@ class GroupBoxController {
           type: "join",
           userId: currentUser.uid,
           userName: currentUser.uid,
-          message: `User ${currentUser.uid} joined the box`,
+          message: `${(currentUser.displayName || currentUser.uid).substring(
+            0,
+            5
+          )} joined the box`,
           timestamp: new Date().toISOString(),
         });
       }
@@ -706,7 +709,9 @@ class GroupBoxController {
         userId: currentUser.uid,
         userName: userName,
         item: result.item,
-        message: `${userName} opened the box and got "${result.item}"`,
+        message: `${userName.substring(0, 5)} opened the box and got "${
+          result.item
+        }"`,
         timestamp: new Date().toISOString(),
       });
 
@@ -855,7 +860,7 @@ class GroupBoxController {
           type: "leave",
           userId: currentUser.uid,
           userName: userName,
-          message: `${userName} has left the box`,
+          message: `${userName.substring(0, 5)} has left the box`,
           timestamp: new Date().toISOString(),
         });
       }

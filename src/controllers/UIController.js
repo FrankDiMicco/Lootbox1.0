@@ -531,16 +531,27 @@ class UIController {
             switch (entry.type) {
               case "join":
                 cssClass += " history-join";
-                displayText = entry.message || `${safeUserName} joined the box`;
+                displayText =
+                  entry.message ||
+                  `${safeUserName.substring(0, 5)} joined the box`;
                 break;
               case "leave":
                 cssClass += " history-leave";
-                displayText = entry.message || `${safeUserName} left the box`;
+                displayText =
+                  entry.message ||
+                  `${safeUserName.substring(0, 5)} left the box`;
                 break;
               case "spin":
                 cssClass += " history-spin";
                 displayText =
-                  entry.message || `${safeUserName} got "${safeItem}"`;
+                  entry.message ||
+                  `${safeUserName.substring(0, 5)} got "${safeItem}"`;
+                break;
+              case "grant":
+                cssClass += " history-grant";
+                displayText =
+                  entry.message ||
+                  `Granted tries to ${safeUserName.substring(0, 5)}`;
                 break;
               default:
                 displayText = entry.message || safeItem;
@@ -964,7 +975,7 @@ class UIController {
       <div class="edit-user-row" data-user-id="${participant.userId}">
         <div class="edit-user-info">
           <div class="edit-user-name">
-            ${this.escapeHtml(participant.userName)}
+            ${this.escapeHtml(participant.userName.substring(0, 5))}
             ${
               participant.userId === groupBoxData.createdBy
                 ? '<span class="creator-badge">Creator</span>'
