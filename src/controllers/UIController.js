@@ -517,6 +517,10 @@ class UIController {
 
           // Handle different event types for group boxes
           if (this.state.currentLootbox?.isGroupBox && entry.type) {
+            // Skip refresh_tries events - they're internal only
+            if (entry.type === "refresh_tries") {
+              return ""; // Return empty string to skip this entry
+            }
             let displayText = entry.message || "";
             let cssClass = "history-item";
 
@@ -996,19 +1000,34 @@ class UIController {
         )
         .join("");
       // Wire up +/− buttons (replace any old handler)
+      usersList.onclick = null;
+
       usersList.onclick = async (e) => {
         const btn = e.target.closest('[data-action="adjust-tries"]');
-        if (!btn) return;
+        if (!btn || btn.disabled) return;
+
+        console.log("UIController button click detected");
+        e.preventDefault();
+        e.stopPropagation();
 
         const userId = btn.dataset.userId;
         const delta = parseInt(btn.dataset.delta, 10);
         const gbId = this.state.currentEditGroupBoxId || groupBoxId;
 
-        btn.disabled = true;
+        // Disable ALL adjust buttons immediately
+        usersList
+          .querySelectorAll('[data-action="adjust-tries"]')
+          .forEach((b) => (b.disabled = true));
+
         try {
           await this.adjustUserTries(userId, gbId, delta);
         } finally {
-          btn.disabled = false;
+          // Re-enable all buttons after a delay
+          setTimeout(() => {
+            usersList
+              .querySelectorAll('[data-action="adjust-tries"]')
+              .forEach((b) => (b.disabled = false));
+          }, 500);
         }
       };
     } catch (error) {

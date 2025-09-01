@@ -456,6 +456,7 @@ class App {
     }
   }
   async handleAdjustTries(data) {
+    console.log("handleAdjustTries called with:", data);
     // simple debounce so one click = one change
     if (this._adjustTriesBusy) return;
     this._adjustTriesBusy = true;
