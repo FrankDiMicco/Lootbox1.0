@@ -66,6 +66,7 @@ class GroupBoxController {
 
             // User-specific data
             userTotalOpens: data.userTotalOpens || 0,
+            viewed: data.viewed || false,
             userRemainingTries:
               data.userRemainingTries !== undefined
                 ? data.userRemainingTries
@@ -388,6 +389,7 @@ class GroupBoxController {
           hasLeft: false,
           isGroupBox: true,
           userTotalOpens: existingData.userTotalOpens || 0,
+          viewed: existing ? existing.viewed : false, // Preserve viewed status
           userRemainingTries: existingData.userRemainingTries,
         });
 

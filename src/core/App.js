@@ -174,6 +174,8 @@ class App {
           if (this.state.currentLootboxIndex !== newIndex) {
             this.state.sessionHistory = [];
           }
+          // Mark as viewed immediately on click to remove "New" badge
+          await this.controllers.lootbox.markAsViewed(newIndex);
           await this.controllers.ui.openLootbox(newIndex);
           break;
         case "confirm-delete":
@@ -329,6 +331,8 @@ class App {
 
         // Group box actions
         case "open-group-box":
+          // Mark group box as viewed immediately on click to remove "New" badge
+          await this.markGroupBoxAsViewed(data.id);
           await this.controllers.ui.openGroupBox(data.id);
           break;
 
@@ -817,6 +821,23 @@ class App {
     } catch (error) {
       console.error("Failed to copy:", error);
       this.controllers.ui.showToast("Failed to copy to clipboard", "error");
+    }
+  }
+
+  // Mark group box as viewed to remove "New" badge
+  async markGroupBoxAsViewed(groupBoxId) {
+    try {
+      const groupBox = this.controllers.groupBox.getGroupBox(groupBoxId);
+      if (groupBox && !groupBox.viewed) {
+        // Mark it as viewed
+        groupBox.viewed = true;
+        // Save to local storage
+        await this.controllers.groupBox.saveToLocal();
+        // Force re-render to update the UI
+        this.controllers.ui.render();
+      }
+    } catch (error) {
+      console.error("Error marking group box as viewed:", error);
     }
   }
 

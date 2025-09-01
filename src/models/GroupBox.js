@@ -23,6 +23,7 @@ class GroupBox extends Lootbox {
 
     // User-specific data
     this.userTotalOpens = data.userTotalOpens || 0;
+    this.viewed = data.viewed || false; // Track if user has clicked on this group box
     this.userRemainingTries =
       data.userRemainingTries !== undefined
         ? data.userRemainingTries
@@ -138,6 +139,7 @@ class GroupBox extends Lootbox {
       organizerOnly: this.organizerOnly,
       creatorParticipates: this.creatorParticipates,
       userTotalOpens: this.userTotalOpens,
+      viewed: this.viewed,
       userRemainingTries: this.userRemainingTries,
       firstParticipated: this.firstParticipated,
       lastParticipated: this.lastParticipated,

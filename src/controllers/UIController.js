@@ -121,6 +121,7 @@ class UIController {
               isCreator: gb.isCreator,
               isOrganizerOnly: gb.isOrganizerOnly,
               userTotalOpens: gb.userTotalOpens,
+              viewed: gb.viewed,
               userRemainingTries: gb.userRemainingTries,
               totalOpens: gb.totalOpens,
               uniqueUsers: gb.uniqueUsers,
@@ -315,7 +316,7 @@ class UIController {
 
     this.state.isOrganizerReadonly = false;
 
-    // Mark viewed
+    // Mark viewed (already done in App.js on click, but ensure it's marked here too)
     await this.lootboxController.markAsViewed(controllerIndex);
 
     // Show it

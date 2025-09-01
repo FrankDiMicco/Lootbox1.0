@@ -19,7 +19,7 @@ class GroupBoxCard {
 
     // Check if this is a new group box for the user
     const isNewBox =
-      (groupBox.userTotalOpens || 0) === 0 && !groupBox.isOrganizerOnly;
+      (groupBox.userTotalOpens || 0) === 0 && !groupBox.viewed && !groupBox.isOrganizerOnly;
 
     // Get group box name
     const groupBoxName =
