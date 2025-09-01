@@ -12,6 +12,18 @@ body {
     padding-bottom: 30px;
 }
 
+/* Body scroll lock when modal is open */
+body.modal-open {
+    overflow: hidden !important;
+    /* Keep the background gradient visible */
+    touch-action: none;
+}
+
+/* Ensure html element also prevents scroll */
+html:has(body.modal-open) {
+    overflow: hidden;
+}
+
 .header {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
     backdrop-filter: blur(10px);

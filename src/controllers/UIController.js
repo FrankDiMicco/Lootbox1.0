@@ -7,6 +7,36 @@ class UIController {
     this.lootboxController = lootboxController;
     this.groupBoxController = groupBoxController;
     this.state = appState;
+    this.scrollPosition = 0;
+  }
+  
+  // Helper functions for scroll lock
+  lockBodyScroll() {
+    // Store scroll position
+    this.scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+    
+    // Add class to prevent scrolling
+    document.body.classList.add("modal-open");
+    document.documentElement.style.overflow = 'hidden';
+    
+    // Prevent scroll on iOS without changing position
+    document.body.style.position = 'relative';
+    document.body.style.overflow = 'hidden';
+    document.body.style.height = '100%';
+  }
+  
+  unlockBodyScroll() {
+    // Remove scroll lock
+    document.body.classList.remove("modal-open");
+    document.documentElement.style.overflow = '';
+    document.body.style.position = '';
+    document.body.style.overflow = '';
+    document.body.style.height = '';
+    
+    // Restore scroll position if needed
+    if (this.scrollPosition) {
+      window.scrollTo(0, this.scrollPosition);
+    }
   }
 
   render() {
@@ -682,6 +712,7 @@ class UIController {
     this.state.editingIndex = -1;
     document.getElementById("modalTitle").textContent = "Create New Lootbox";
     document.getElementById("editModal").classList.add("show");
+    this.lockBodyScroll();
     await this.initializeModalForm();
   }
 
@@ -692,6 +723,7 @@ class UIController {
 
     document.getElementById("modalTitle").textContent = "Edit Lootbox";
     document.getElementById("editModal").classList.add("show");
+    this.lockBodyScroll();
     await this.populateModalForm(lootbox);
   }
 
@@ -699,6 +731,7 @@ class UIController {
     const modal = document.getElementById(modalId);
     if (modal) {
       modal.classList.remove("show");
+      this.unlockBodyScroll();
     }
   }
 
@@ -889,6 +922,7 @@ class UIController {
     const modal = document.getElementById("groupBoxEditModal");
     if (modal) {
       modal.classList.add("show");
+      this.lockBodyScroll();
     }
   }
 
@@ -1267,6 +1301,7 @@ class UIController {
     const modal = document.getElementById("deleteModal");
     if (modal) {
       modal.classList.add("show");
+      this.lockBodyScroll();
     }
   }
 
@@ -1274,6 +1309,7 @@ class UIController {
     const modal = document.getElementById("creatorDeleteModal");
     if (modal) {
       modal.classList.add("show");
+      this.lockBodyScroll();
     }
   }
 
@@ -1281,6 +1317,7 @@ class UIController {
     const modal = document.getElementById("shareModal");
     if (modal) {
       modal.classList.add("show");
+      this.lockBodyScroll();
     }
   }
 
@@ -1288,6 +1325,7 @@ class UIController {
     const modal = document.getElementById("shareModal");
     if (modal) {
       modal.classList.add("show");
+      this.lockBodyScroll();
     }
   }
 
@@ -1296,6 +1334,7 @@ class UIController {
     const creatorDeleteModal = document.getElementById("creatorDeleteModal");
     if (deleteModal) deleteModal.classList.remove("show");
     if (creatorDeleteModal) creatorDeleteModal.classList.remove("show");
+    this.unlockBodyScroll();
   }
 
   // Form management methods
