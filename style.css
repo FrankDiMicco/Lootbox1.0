@@ -74,11 +74,6 @@ body {
 
 .hamburger-menu:hover span {
     background: #e5e7eb;
-    transform: scaleX(1.1);
-}
-
-.hamburger-menu:hover {
-    transform: scale(1.05);
 }
 
 .container {
@@ -1264,6 +1259,44 @@ body {
 
 /* Mobile-specific improvements */
 @media (max-width: 768px) {
+    /* Make filter buttons fit on one line */
+    .filter-section {
+        padding: 10px 15px;
+    }
+    
+    .filter-buttons {
+        gap: 8px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    
+    .filter-buttons::-webkit-scrollbar {
+        display: none;
+    }
+    
+    .filter-btn {
+        padding: 6px 12px;
+        font-size: 13px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        min-width: fit-content;
+    }
+    
+    /* Extra small screens */
+    @media (max-width: 380px) {
+        .filter-buttons {
+            gap: 6px;
+        }
+        
+        .filter-btn {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+    }
+    
     .chest-selection {
         padding: 5px;
         gap: 10px;
