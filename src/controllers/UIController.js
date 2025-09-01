@@ -1114,9 +1114,18 @@ class UIController {
     const oddsInputs = itemsList.querySelectorAll(".edit-item-odds-input");
     if (oddsInputs.length === 0) return;
 
-    const evenOdds = (1 / oddsInputs.length).toFixed(3);
-    oddsInputs.forEach((input) => {
-      input.value = evenOdds;
+    const baseOdds = 1 / oddsInputs.length;
+    let runningTotal = 0;
+    
+    oddsInputs.forEach((input, index) => {
+      if (index < oddsInputs.length - 1) {
+        const value = parseFloat(baseOdds.toFixed(3));
+        input.value = value;
+        runningTotal += value;
+      } else {
+        // Last item absorbs the difference to make exactly 1
+        input.value = (1 - runningTotal).toFixed(3);
+      }
     });
 
     this.updateEditTotalOdds();
@@ -1135,10 +1144,18 @@ class UIController {
     );
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
 
+    let runningTotal = 0;
+    
     // Normalize to sum to 1
     weights.forEach((weight, index) => {
-      const normalizedOdds = (weight / totalWeight).toFixed(3);
-      oddsInputs[index].value = normalizedOdds;
+      if (index < weights.length - 1) {
+        const normalizedOdds = parseFloat((weight / totalWeight).toFixed(3));
+        oddsInputs[index].value = normalizedOdds;
+        runningTotal += normalizedOdds;
+      } else {
+        // Last item absorbs the difference to make exactly 1
+        oddsInputs[index].value = (1 - runningTotal).toFixed(3);
+      }
     });
 
     this.updateEditTotalOdds();
@@ -1329,9 +1346,18 @@ class UIController {
     const oddsInputs = itemsList.querySelectorAll(".item-odds");
     if (oddsInputs.length === 0) return;
 
-    const evenOdds = (1 / oddsInputs.length).toFixed(3);
-    oddsInputs.forEach((input) => {
-      input.value = evenOdds;
+    const baseOdds = 1 / oddsInputs.length;
+    let runningTotal = 0;
+    
+    oddsInputs.forEach((input, index) => {
+      if (index < oddsInputs.length - 1) {
+        const value = parseFloat(baseOdds.toFixed(3));
+        input.value = value;
+        runningTotal += value;
+      } else {
+        // Last item absorbs the difference to make exactly 1
+        input.value = (1 - runningTotal).toFixed(3);
+      }
     });
 
     this.updateTotalOdds();
@@ -1350,10 +1376,18 @@ class UIController {
     );
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
 
+    let runningTotal = 0;
+    
     // Normalize to sum to 1
     weights.forEach((weight, index) => {
-      const normalizedOdds = (weight / totalWeight).toFixed(3);
-      oddsInputs[index].value = normalizedOdds;
+      if (index < weights.length - 1) {
+        const normalizedOdds = parseFloat((weight / totalWeight).toFixed(3));
+        oddsInputs[index].value = normalizedOdds;
+        runningTotal += normalizedOdds;
+      } else {
+        // Last item absorbs the difference to make exactly 1
+        oddsInputs[index].value = (1 - runningTotal).toFixed(3);
+      }
     });
 
     this.updateTotalOdds();
