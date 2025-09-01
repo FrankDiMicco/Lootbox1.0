@@ -222,10 +222,17 @@ class UIController {
     const triesEl = document.getElementById("triesInfo");
     if (triesEl) {
       if (lootbox.isGroupBox) {
-        triesEl.textContent =
-          lootbox.userRemainingTries !== undefined
-            ? `Tries remaining: ${lootbox.userRemainingTries}`
-            : "Group Box";
+        // Check if expired
+        if (lootbox.expiresAt && new Date(lootbox.expiresAt) <= new Date()) {
+          triesEl.textContent = "Group Box Expired (View Only)";
+          triesEl.style.color = "#ef4444"; // Red color
+        } else {
+          triesEl.textContent =
+            lootbox.userRemainingTries !== undefined
+              ? `Tries remaining: ${lootbox.userRemainingTries}`
+              : "Group Box";
+          triesEl.style.color = ""; // Reset to default color
+        }
       } else {
         triesEl.textContent =
           lootbox.maxTries === "unlimited"
@@ -364,15 +371,18 @@ class UIController {
               );
               groupBox.userRemainingTries = freshParticipant.userRemainingTries;
               groupBox.userTotalOpens = freshParticipant.userTotalOpens || 0;
-              
+
               // Also update expiration data from main group box data
               if (freshData.expiresAt !== undefined) {
                 groupBox.expiresAt = freshData.expiresAt;
               }
-              if (freshData.settings && freshData.settings.expiresIn !== undefined) {
+              if (
+                freshData.settings &&
+                freshData.settings.expiresIn !== undefined
+              ) {
                 groupBox.expiresIn = freshData.settings.expiresIn;
               }
-              
+
               console.log("After update:", groupBox.userRemainingTries);
             } else {
               console.log("ERROR: groupBox is null!");

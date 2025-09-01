@@ -665,6 +665,15 @@ class GroupBoxController {
         return { success: false, errors: ["Group box not found in Firebase"] };
       }
 
+      // Check if expired
+      if (freshData.expiresAt && new Date(freshData.expiresAt) <= new Date()) {
+        console.log("Group box has expired");
+        return {
+          success: false,
+          errors: ["This group box has expired - viewing only"],
+        };
+      }
+
       console.log("SPIN: Fresh participants data:", freshData.participants);
 
       // Find this user's fresh participant data
@@ -1006,7 +1015,7 @@ class GroupBoxController {
       }
 
       const { setDoc, doc } = window.firebaseFunctions;
-      
+
       // Update the participant record in Firebase
       await setDoc(
         doc(
@@ -1018,7 +1027,7 @@ class GroupBoxController {
         ),
         {
           ...updates,
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         },
         { merge: true }
       );
