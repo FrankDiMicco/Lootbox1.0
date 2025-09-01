@@ -14,11 +14,8 @@ class App {
       firebase: null,
     };
 
-    this.handleAdjustTries = this.handleAdjustTries.bind(this);
-
     // Flags
     this._delegationSetup = false; // prevent double listeners
-    this._adjustTriesBusy = false; // debounce adjust-tries
 
     // Controllers
     this.controllers = {
@@ -363,9 +360,6 @@ class App {
           await this.controllers.groupBox.toggleGroupBoxFavorite(data.id);
           this.controllers.ui.render();
           break;
-        case "adjust-tries":
-          await this.handleAdjustTries(data);
-          break;
 
         case "edit-group-box":
           console.log("About to call showEditGroupBoxModal with:", data.id);
@@ -465,6 +459,25 @@ class App {
           }
           break;
 
+        case "adjust-tries-display":
+          // Just adjust the display value, don't save to Firebase
+          const input = document.getElementById(`tries-${data.userId}`);
+          if (input) {
+            const currentValue = parseInt(input.value) || 0;
+            const delta = parseInt(data.delta) || 0;
+            const newValue = Math.max(0, Math.min(999, currentValue + delta));
+            input.value = newValue;
+
+            // Highlight the input to show it's been changed
+            const originalValue = parseInt(input.dataset.original) || 0;
+            if (newValue !== originalValue) {
+              input.style.borderColor = "#10b981"; // Green to show unsaved changes
+            } else {
+              input.style.borderColor = ""; // Reset to default
+            }
+          }
+          break;
+
         default:
           console.warn("Unknown action:", action);
       }
@@ -473,57 +486,6 @@ class App {
       const errorMessage =
         error?.message || error?.toString() || "Unknown error";
       this.controllers.ui.showToast(`Error: ${errorMessage}`, "error");
-    }
-  }
-  async handleAdjustTries(data) {
-    console.log("handleAdjustTries called with:", data);
-    // simple debounce so one click = one change
-    if (this._adjustTriesBusy) return;
-    this._adjustTriesBusy = true;
-
-    try {
-      const groupBoxId = this.state.currentEditGroupBoxId;
-      const userId = data.userId;
-      const delta = parseInt(data.delta, 10) || 0;
-
-      if (!groupBoxId || !userId || !Number.isFinite(delta)) {
-        this.controllers.ui.showToast("Missing info for adjust tries", "error");
-        return;
-      }
-
-      // Apply the change in the backend
-      const res = await this.controllers.groupBox.adjustUserTries(
-        groupBoxId,
-        userId,
-        delta
-      );
-
-      if (!res || !res.success) {
-        this.controllers.ui.showToast(
-          res?.error || "Failed to update tries",
-          "error"
-        );
-        return;
-      }
-
-      // Update the little center bubble that shows "granted this session"
-      const grantEl = document.getElementById(`grant-${userId}`);
-      if (grantEl) {
-        let granted = parseInt(grantEl.textContent || "0", 10);
-        granted = Math.max(0, granted + delta);
-        grantEl.textContent = String(granted);
-      }
-
-      // Update the "Remaining: X" label under the user
-      const remainingEl = document.getElementById(`remaining-${userId}`);
-      if (remainingEl) remainingEl.textContent = String(res.newTries);
-
-      this.controllers.ui.showToast(`Updated tries to ${res.newTries}`);
-    } catch (e) {
-      console.error("Error adjusting tries:", e);
-      this.controllers.ui.showToast("Failed to update tries", "error");
-    } finally {
-      this._adjustTriesBusy = false;
     }
   }
 

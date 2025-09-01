@@ -1037,20 +1037,28 @@ class UIController {
           </div>
         </div>
 
-        <div class="tries-control">
-          <button class="tries-btn minus"
-                  data-action="adjust-tries"
-                  data-user-id="${participant.userId}"
-                  data-delta="-1">−</button>
+<div class="tries-control">
+    <button class="tries-btn minus"
+            data-action="adjust-tries-display"
+            data-user-id="${participant.userId}"
+            data-delta="-1"
+            type="button">−</button>
 
-          <!-- Grant counter starts at 0 -->
-          <div class="tries-display" id="grant-${participant.userId}">0</div>
+    <input type="number" 
+           class="tries-input" 
+           id="tries-${participant.userId}"
+           value="${participant.userRemainingTries ?? 0}"
+           min="0"
+           max="999"
+           data-original="${participant.userRemainingTries ?? 0}"
+           data-user-id="${participant.userId}">
 
-          <button class="tries-btn plus"
-                  data-action="adjust-tries"
-                  data-user-id="${participant.userId}"
-                  data-delta="1">+</button>
-        </div>
+    <button class="tries-btn plus"
+            data-action="adjust-tries-display"
+            data-user-id="${participant.userId}"
+            data-delta="1"
+            type="button">+</button>
+</div>
       </div>
     `
         )
@@ -1252,7 +1260,48 @@ class UIController {
       return;
     }
 
-    // Collect updated items
+    // First, collect and apply tries changes
+    const triesInputs = document.querySelectorAll(".tries-input");
+    const triesUpdates = [];
+
+    for (const input of triesInputs) {
+      const userId = input.dataset.userId;
+      const originalValue = parseInt(input.dataset.original) || 0;
+      const newValue = parseInt(input.value) || 0;
+
+      if (newValue !== originalValue) {
+        const delta = newValue - originalValue;
+        triesUpdates.push({ userId, delta, newValue });
+      }
+    }
+
+    // Apply tries changes to Firebase
+    if (triesUpdates.length > 0) {
+      this.showToast("Updating tries for participants...");
+
+      for (const update of triesUpdates) {
+        try {
+          await this.groupBoxController.adjustUserTries(
+            groupBoxId,
+            update.userId,
+            update.delta
+          );
+          console.log(
+            `Updated tries for user ${update.userId}: ${
+              update.delta > 0 ? "+" : ""
+            }${update.delta}`
+          );
+        } catch (error) {
+          console.error(
+            `Failed to update tries for user ${update.userId}:`,
+            error
+          );
+          this.showToast(`Failed to update tries for a user`, "error");
+        }
+      }
+    }
+
+    // Now handle items changes (existing code)
     const itemsList = document.getElementById("editItemsList");
     const items = [];
 
@@ -1279,7 +1328,7 @@ class UIController {
       return;
     }
 
-    // Update the group box
+    // Update the group box items
     try {
       // Update local copy
       groupBox.items = items;
@@ -1300,7 +1349,11 @@ class UIController {
         console.log("Firebase update successful");
       }
 
-      this.showToast("Group box updated successfully");
+      this.showToast(
+        `Group box updated successfully${
+          triesUpdates.length > 0 ? " (including tries changes)" : ""
+        }`
+      );
       this.closeModal("groupBoxEditModal");
       this.render(); // Refresh the view
     } catch (error) {
