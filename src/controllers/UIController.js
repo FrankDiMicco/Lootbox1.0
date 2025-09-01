@@ -1027,14 +1027,17 @@ class UIController {
                 : ""
             }
           </div>
-          <div class="edit-user-stats">
-            <span>Opens: ${participant.userTotalOpens || 0}</span>
-            <span style="margin-left:12px;">
-              Remaining: <strong id="remaining-${participant.userId}">
-                ${participant.userRemainingTries ?? 0}
-              </strong>
-            </span>
-          </div>
+<div class="edit-user-stats">
+    <span>Opens: ${participant.userTotalOpens || 0}</span>
+    <span style="margin-left:12px;">
+        Current: <strong id="current-${participant.userId}">
+            ${participant.userRemainingTries ?? 0}
+        </strong>
+        <span id="preview-${
+          participant.userId
+        }" style="color: #10b981; margin-left: 8px;"></span>
+    </span>
+</div>
         </div>
 
 <div class="tries-control">
@@ -1047,11 +1050,12 @@ class UIController {
     <input type="number" 
            class="tries-input" 
            id="tries-${participant.userId}"
-           value="${participant.userRemainingTries ?? 0}"
-           min="0"
+           value="0"
+           min="-999"
            max="999"
-           data-original="${participant.userRemainingTries ?? 0}"
-           data-user-id="${participant.userId}">
+           data-current="${participant.userRemainingTries ?? 0}"
+           data-user-id="${participant.userId}"
+           placeholder="±0">
 
     <button class="tries-btn plus"
             data-action="adjust-tries-display"
@@ -1241,10 +1245,8 @@ class UIController {
 
   async saveGroupBoxChanges() {
     console.log("saveGroupBoxChanges called");
-
     const groupBoxId = this.state.currentEditGroupBoxId;
     console.log("currentEditGroupBoxId:", groupBoxId);
-
     if (!groupBoxId) {
       console.log("No groupBoxId found");
       this.showToast("No group box ID found", "error");
@@ -1253,7 +1255,6 @@ class UIController {
 
     const groupBox = this.groupBoxController.getGroupBox(groupBoxId);
     console.log("Found groupBox:", groupBox);
-
     if (!groupBox) {
       console.log("GroupBox not found");
       this.showToast("Group box not found", "error");
@@ -1266,19 +1267,22 @@ class UIController {
 
     for (const input of triesInputs) {
       const userId = input.dataset.userId;
-      const originalValue = parseInt(input.dataset.original) || 0;
-      const newValue = parseInt(input.value) || 0;
+      const currentValue = parseInt(input.dataset.current) || 0; // Changed from 'original' to 'current'
+      const grantAmount = parseInt(input.value) || 0; // This is the delta amount
 
-      if (newValue !== originalValue) {
-        const delta = newValue - originalValue;
-        triesUpdates.push({ userId, delta, newValue });
+      if (grantAmount !== 0) {
+        const newValue = Math.max(0, currentValue + grantAmount);
+        triesUpdates.push({
+          userId,
+          delta: grantAmount, // The amount to add/subtract
+          newValue, // The final value after adding/subtracting
+        });
       }
     }
 
     // Apply tries changes to Firebase
     if (triesUpdates.length > 0) {
       this.showToast("Updating tries for participants...");
-
       for (const update of triesUpdates) {
         try {
           await this.groupBoxController.adjustUserTries(
@@ -1304,11 +1308,9 @@ class UIController {
     // Now handle items changes (existing code)
     const itemsList = document.getElementById("editItemsList");
     const items = [];
-
     itemsList.querySelectorAll(".edit-item-row").forEach((row) => {
       const nameInput = row.querySelector(".edit-item-name-input");
       const oddsInput = row.querySelector(".edit-item-odds-input");
-
       if (nameInput && oddsInput && nameInput.value.trim()) {
         items.push({
           name: nameInput.value.trim(),
@@ -1316,13 +1318,11 @@ class UIController {
         });
       }
     });
-
     console.log("Collected items:", items);
 
     // Validate odds sum to ~1
     const totalOdds = items.reduce((sum, item) => sum + item.odds, 0);
     console.log("Total odds:", totalOdds);
-
     if (Math.abs(totalOdds - 1) > 0.001) {
       this.showToast("Item odds must sum to 100%", "error");
       return;
@@ -1333,7 +1333,6 @@ class UIController {
       // Update local copy
       groupBox.items = items;
       groupBox.lootboxData.items = items;
-
       console.log("Saving to Firebase...");
 
       // Save to Firebase

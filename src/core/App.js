@@ -460,20 +460,28 @@ class App {
           break;
 
         case "adjust-tries-display":
-          // Just adjust the display value, don't save to Firebase
+          // Adjust the grant amount display
           const input = document.getElementById(`tries-${data.userId}`);
           if (input) {
             const currentValue = parseInt(input.value) || 0;
             const delta = parseInt(data.delta) || 0;
-            const newValue = Math.max(0, Math.min(999, currentValue + delta));
+            const newValue = currentValue + delta;
             input.value = newValue;
 
-            // Highlight the input to show it's been changed
-            const originalValue = parseInt(input.dataset.original) || 0;
-            if (newValue !== originalValue) {
-              input.style.borderColor = "#10b981"; // Green to show unsaved changes
-            } else {
-              input.style.borderColor = ""; // Reset to default
+            // Update preview of what the final value will be
+            const currentTries = parseInt(input.dataset.current) || 0;
+            const finalTries = Math.max(0, currentTries + newValue);
+            const previewEl = document.getElementById(`preview-${data.userId}`);
+
+            if (previewEl) {
+              if (newValue !== 0) {
+                const sign = newValue > 0 ? "+" : "";
+                previewEl.textContent = `→ ${finalTries} (${sign}${newValue})`;
+                input.style.borderColor = "#10b981";
+              } else {
+                previewEl.textContent = "";
+                input.style.borderColor = "";
+              }
             }
           }
           break;
