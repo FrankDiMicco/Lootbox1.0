@@ -1,0 +1,432 @@
+/* Navigation Drawer Styles */
+
+/* CSS Variables for theming */
+:root {
+    --drawer-width: 280px;
+    --drawer-bg: rgba(30, 41, 59, 0.98);
+    --drawer-border: rgba(139, 92, 246, 0.3);
+    --drawer-text: #e2e8f0;
+    --drawer-text-muted: #94a3b8;
+    --drawer-hover-bg: rgba(139, 92, 246, 0.1);
+    --drawer-active-bg: rgba(139, 92, 246, 0.2);
+    --drawer-active-border: #8b5cf6;
+    --drawer-transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --drawer-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --drawer-transition: 0.01s;
+    }
+}
+
+/* Update existing hamburger menu when drawer is open */
+.hamburger-menu[aria-expanded="true"] span:nth-child(1) {
+    transform: rotate(45deg) translate(5px, 5px);
+}
+
+.hamburger-menu[aria-expanded="true"] span:nth-child(2) {
+    opacity: 0;
+}
+
+.hamburger-menu[aria-expanded="true"] span:nth-child(3) {
+    transform: rotate(-45deg) translate(5px, -5px);
+}
+
+/* Overlay */
+.nav-drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 9998;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--drawer-transition), visibility var(--drawer-transition);
+}
+
+.nav-drawer-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Navigation Drawer */
+.nav-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--drawer-width);
+    max-width: 85vw;
+    background: var(--drawer-bg);
+    backdrop-filter: blur(20px);
+    border-right: 1px solid var(--drawer-border);
+    box-shadow: var(--drawer-shadow);
+    z-index: 9999;
+    transform: translateX(-100%);
+    transition: transform var(--drawer-transition);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.nav-drawer.open {
+    transform: translateX(0);
+}
+
+/* Drawer Header */
+.drawer-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--drawer-border);
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 20%, #312e81 50%, #1e293b 100%);
+}
+
+.drawer-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--drawer-transition);
+}
+
+.drawer-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.drawer-close:focus-visible {
+    outline: 2px solid white;
+    outline-offset: 2px;
+}
+
+/* Search Bar */
+.drawer-search {
+    position: relative;
+    margin-top: 40px;
+}
+
+.drawer-search input {
+    width: 100%;
+    padding: 10px 12px 10px 40px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    transition: all var(--drawer-transition);
+}
+
+.drawer-search input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.drawer-search input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255, 255, 255, 0.5);
+    pointer-events: none;
+}
+
+/* Profile Section */
+.drawer-profile {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: rgba(71, 85, 105, 0.2);
+    border-bottom: 1px solid var(--drawer-border);
+}
+
+.profile-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid var(--drawer-border);
+    background: rgba(139, 92, 246, 0.1);
+}
+
+.profile-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-info {
+    flex: 1;
+}
+
+.profile-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--drawer-text);
+    margin: 0 0 4px 0;
+}
+
+.profile-status {
+    font-size: 12px;
+    color: var(--drawer-text-muted);
+    margin: 0;
+}
+
+/* Navigation Content */
+.drawer-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--drawer-border) transparent;
+}
+
+.drawer-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.drawer-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.drawer-content::-webkit-scrollbar-thumb {
+    background: var(--drawer-border);
+    border-radius: 3px;
+}
+
+/* Navigation Sections */
+.nav-section {
+    margin-bottom: 30px;
+}
+
+.section-title {
+    padding: 0 20px;
+    margin: 0 0 10px 0;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--drawer-text-muted);
+}
+
+.nav-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    color: var(--drawer-text);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all var(--drawer-transition);
+    position: relative;
+    border-left: 3px solid transparent;
+}
+
+.nav-item:hover {
+    background: var(--drawer-hover-bg);
+    padding-left: 23px;
+}
+
+.nav-item.active {
+    background: var(--drawer-active-bg);
+    border-left-color: var(--drawer-active-border);
+    color: #ffffff;
+}
+
+.nav-item:focus-visible {
+    outline: 2px solid var(--drawer-active-border);
+    outline-offset: -2px;
+}
+
+.nav-icon {
+    flex-shrink: 0;
+    color: currentColor;
+    opacity: 0.8;
+}
+
+.nav-item.active .nav-icon {
+    opacity: 1;
+}
+
+.nav-badge {
+    margin-left: auto;
+    padding: 2px 8px;
+    background: var(--drawer-active-border);
+    color: white;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+/* Footer */
+.drawer-footer {
+    padding: 15px;
+    border-top: 1px solid var(--drawer-border);
+    background: rgba(30, 41, 59, 0.5);
+}
+
+.footer-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.footer-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--drawer-border);
+}
+
+.footer-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.footer-info {
+    flex: 1;
+}
+
+.footer-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--drawer-text);
+    margin: 0 0 2px 0;
+}
+
+.footer-status {
+    font-size: 11px;
+    color: var(--drawer-text-muted);
+    margin: 0;
+}
+
+.footer-action {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--drawer-border);
+    border-radius: 6px;
+    color: var(--drawer-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--drawer-transition);
+}
+
+.footer-action:hover {
+    background: var(--drawer-hover-bg);
+    color: var(--drawer-text);
+}
+
+/* Body scroll lock */
+body.drawer-open {
+    overflow: hidden;
+}
+
+/* Demo Content */
+.demo-content {
+    padding: 100px 20px 20px;
+    max-width: 800px;
+    margin: 0 auto;
+    background: #0f172a;
+    min-height: 100vh;
+    color: #e2e8f0;
+}
+
+.demo-content h1 {
+    color: #f1f5f9;
+    margin-bottom: 20px;
+}
+
+.demo-content p {
+    line-height: 1.6;
+    margin-bottom: 15px;
+}
+
+.demo-content ul {
+    margin-left: 20px;
+    line-height: 1.8;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .nav-hamburger {
+        top: 15px;
+        left: 15px;
+    }
+    
+    .drawer-header {
+        padding: 15px;
+    }
+    
+    .drawer-profile {
+        padding: 15px;
+    }
+    
+    .nav-item {
+        padding: 10px 15px;
+    }
+    
+    .nav-item:hover {
+        padding-left: 18px;
+    }
+    
+    .section-title {
+        padding: 0 15px;
+    }
+}
+
+/* Touch device optimizations */
+@media (hover: none) {
+    .nav-item:hover {
+        background: transparent;
+        padding-left: 20px;
+    }
+    
+    .nav-item:active {
+        background: var(--drawer-hover-bg);
+    }
+}
+
+/* Focus visible polyfill for older browsers */
+.nav-item:focus:not(:focus-visible) {
+    outline: none;
+}
+
+.drawer-close:focus:not(:focus-visible) {
+    outline: none;
+}
+
+.footer-action:focus:not(:focus-visible) {
+    outline: none;
+}

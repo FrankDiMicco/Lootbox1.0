@@ -5,11 +5,170 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lootbox Creator</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="drawer.css">
 </head>
 <body>
+    <!-- Navigation Drawer -->
+    <div class="nav-drawer-overlay" data-drawer-overlay></div>
+    
+    <nav 
+        id="navDrawer"
+        class="nav-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation menu">
+        
+        <!-- Drawer Header -->
+        <div class="drawer-header">
+            <button 
+                class="drawer-close"
+                aria-label="Close navigation menu"
+                data-drawer-close>
+                ×
+            </button>
+            
+            <!-- Search Bar -->
+            <div class="drawer-search">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input 
+                    type="search" 
+                    placeholder="Search lootboxes..."
+                    aria-label="Search navigation">
+            </div>
+        </div>
+
+        <!-- User Profile Section -->
+        <div class="drawer-profile">
+            <div class="profile-avatar">
+                <img src="chests/chest.png" alt="User avatar">
+            </div>
+            <div class="profile-info">
+                <h3 class="profile-name">Lootbox Creator</h3>
+                <p class="profile-status">Ready to spin</p>
+            </div>
+        </div>
+
+        <!-- Navigation Sections -->
+        <div class="drawer-content">
+            <!-- Main Section -->
+            <div class="nav-section">
+                <h4 class="section-title">Main</h4>
+                <ul class="nav-list">
+                    <li>
+                        <a href="#" class="nav-item active" data-page="all">
+                            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+                            </svg>
+                            <span>All Lootboxes</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-item" data-page="new">
+                            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20 6h-2.18c.11-.31.18-.65.18-1a2.996 2.996 0 0 0-5.5-1.65l-.5.67-.5-.68C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1z"/>
+                            </svg>
+                            <span>New</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-item" data-page="favorites">
+                            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                            </svg>
+                            <span>Favorites</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-item" data-page="shared">
+                            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
+                            </svg>
+                            <span>Shared Boxes</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Tools Section -->
+            <div class="nav-section">
+                <h4 class="section-title">Tools</h4>
+                <ul class="nav-list">
+                    <li>
+                        <a href="#" class="nav-item" data-page="create">
+                            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                            </svg>
+                            <span>Create New Lootbox</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-item" data-page="import">
+                            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
+                            </svg>
+                            <span>Import Lootbox</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-item" data-page="export">
+                            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
+                            </svg>
+                            <span>Export All</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Settings Section -->
+            <div class="nav-section">
+                <h4 class="section-title">Settings</h4>
+                <ul class="nav-list">
+                    <li>
+                        <a href="#" class="nav-item" data-page="preferences">
+                            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97 0-.33-.03-.65-.07-.97l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.39-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.08-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.32-.07.64-.07.97 0 .33.03.65.07.97l-2.11 1.63c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.39 1.06.73 1.69.98l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.25 1.17-.59 1.69-.98l2.49 1c.22.08.49 0 .61-.22l2-3.46c.13-.22.07-.49-.12-.64L19.43 12.53Z"/>
+                            </svg>
+                            <span>Preferences</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-item" data-page="help">
+                            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+                            </svg>
+                            <span>Help & Support</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="drawer-footer">
+            <div class="footer-user">
+                <div class="footer-avatar">
+                    <img src="chests/chest.png" alt="User">
+                </div>
+                <div class="footer-info">
+                    <p class="footer-name">Guest User</p>
+                    <p class="footer-status">Not signed in</p>
+                </div>
+                <button class="footer-action" aria-label="User settings">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </nav>
+
     <div class="header">
         <div class="header-content">
-            <button class="hamburger-menu" data-action="show-menu">
+            <button class="hamburger-menu" data-action="show-menu" data-drawer-trigger aria-expanded="false" aria-controls="navDrawer">
                 <span></span>
                 <span></span>
                 <span></span>
@@ -343,5 +502,8 @@
         // Make app globally available for debugging
         window.app = app;
     </script>
+    
+    <!-- Navigation Drawer Script -->
+    <script src="drawer.js"></script>
 </body>
 </html>
