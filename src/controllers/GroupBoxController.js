@@ -134,15 +134,45 @@ class GroupBoxController {
   }
 
   getAllGroupBoxes() {
-    // return unique, non-left boxes by groupBoxId
-    const seen = new Set();
-    return this.groupBoxes.filter((gb) => {
-      if (gb.hasLeft) return false;
-      if (!gb.groupBoxId) return false;
-      if (seen.has(gb.groupBoxId)) return false;
-      seen.add(gb.groupBoxId);
-      return true;
-    });
+    // Clean up the array first - remove any duplicates or invalid entries
+    const validBoxes = [];
+    const seenIds = new Set();
+
+    for (const gb of this.groupBoxes) {
+      // Skip if user has left
+      if (gb.hasLeft === true) {
+        console.log("Skipping left box:", gb.groupBoxId);
+        continue;
+      }
+
+      // Skip if no groupBoxId
+      if (!gb.groupBoxId) {
+        console.log("Skipping box with no ID");
+        continue;
+      }
+
+      // Skip duplicates
+      if (seenIds.has(gb.groupBoxId)) {
+        console.log("Skipping duplicate:", gb.groupBoxId);
+        continue;
+      }
+
+      seenIds.add(gb.groupBoxId);
+      validBoxes.push(gb);
+    }
+
+    // Update the internal array to remove any cleaned items
+    if (validBoxes.length !== this.groupBoxes.length) {
+      console.log(
+        "Cleaning group boxes array from",
+        this.groupBoxes.length,
+        "to",
+        validBoxes.length
+      );
+      this.groupBoxes = validBoxes;
+    }
+
+    return validBoxes;
   }
 
   getGroupBoxIncludingLeft(groupBoxId) {
@@ -836,8 +866,9 @@ class GroupBoxController {
         }
       } else {
         // User is leaving but NOT deleting for everyone
-        // DON'T delete the participation record - just mark as left
+        // Mark as left in Firebase
         if (groupBox.id) {
+          console.log("Marking group box as left in Firebase:", groupBox.id);
           const { updateDoc, doc } = window.firebaseFunctions;
           await updateDoc(
             doc(
@@ -855,16 +886,10 @@ class GroupBoxController {
               userTotalOpens: groupBox.userTotalOpens,
             }
           );
-
-          groupBox.hasLeft = true;
-
-          console.log(
-            `Marked participation as left, preserving ${groupBox.userRemainingTries} remaining tries`
-          );
         }
 
         // Record leave event
-        const userName = currentUser.uid;
+        const userName = currentUser.displayName || currentUser.uid;
         await this.firebase.addSessionHistoryEvent(groupBoxId, {
           type: "leave",
           userId: currentUser.uid,
@@ -874,15 +899,24 @@ class GroupBoxController {
         });
       }
 
-      // Remove from local array
+      // IMPORTANT: Always remove from local array when user leaves
+      console.log(
+        "Removing from local array, current length:",
+        this.groupBoxes.length
+      );
       const index = this.groupBoxes.findIndex(
         (gb) => gb.groupBoxId === groupBoxId
       );
+      console.log("Found at index:", index);
       if (index >= 0) {
         this.groupBoxes.splice(index, 1);
       }
 
       await this.save();
+
+      // Also force a cleanup of the array
+      this.getAllGroupBoxes(); // This will clean up any lingering entries
+
       return { success: true, groupBoxName };
     } catch (error) {
       console.error("Error deleting group box:", error);

@@ -199,14 +199,33 @@ class App {
             data.type === "groupbox" &&
             this.state.pendingDeleteGroupBoxId !== undefined
           ) {
+            // Add console log to debug
+            console.log(
+              "Deleting group box:",
+              this.state.pendingDeleteGroupBoxId
+            );
+
             const result = await this.controllers.groupBox.deleteGroupBox(
               this.state.pendingDeleteGroupBoxId,
               false // deleteForEveryone = false (just leave the group)
             );
+
+            console.log("Delete result:", result);
+
             if (result.success) {
               this.controllers.ui.showToast(`Left "${result.groupBoxName}"`);
               this.controllers.ui.closeModal("deleteModal");
-              this.controllers.ui.render();
+
+              // Force a complete re-render after a small delay
+              setTimeout(() => {
+                this.controllers.ui.render();
+              }, 100);
+            } else {
+              console.error("Delete failed:", result.errors);
+              this.controllers.ui.showToast(
+                result.errors?.[0] || "Failed to leave group box",
+                "error"
+              );
             }
             this.state.pendingDeleteGroupBoxId = undefined;
           }
