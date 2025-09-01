@@ -636,10 +636,12 @@ html:has(body.modal-open) {
 
 .item-name-input {
     flex: 1;
+    min-width: 200px;
 }
 
 .item-odds-input {
-    width: 80px;
+    width: 60px;
+    max-width: 60px;
 }
 
 /* Hide spinner arrows on number inputs */
@@ -1008,6 +1010,8 @@ input[type="number"] {
 .item-odds {
     color: #64748b;
     font-size: 14px;
+    width: 60px;
+    max-width: 60px;
 }
 
 /* Session History Styles - FIXED! */
@@ -1615,8 +1619,9 @@ input[type="number"] {
 }
 
 .edit-item-odds-input {
-    width: 80px;
-    padding: 6px 12px;
+    width: 60px;
+    max-width: 60px;
+    padding: 6px 8px;
     border: 1px solid #d1d5db;
     border-radius: 6px;
     font-size: 14px;
