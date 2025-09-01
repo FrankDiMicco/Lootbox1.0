@@ -9,30 +9,31 @@ class UIController {
     this.state = appState;
     this.scrollPosition = 0;
   }
-  
+
   // Helper functions for scroll lock
   lockBodyScroll() {
     // Store scroll position
-    this.scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
-    
+    this.scrollPosition =
+      window.pageYOffset || document.documentElement.scrollTop;
+
     // Add class to prevent scrolling
     document.body.classList.add("modal-open");
-    document.documentElement.style.overflow = 'hidden';
-    
+    document.documentElement.style.overflow = "hidden";
+
     // Prevent scroll on iOS without changing position
-    document.body.style.position = 'relative';
-    document.body.style.overflow = 'hidden';
-    document.body.style.height = '100%';
+    document.body.style.position = "relative";
+    document.body.style.overflow = "hidden";
+    document.body.style.height = "100%";
   }
-  
+
   unlockBodyScroll() {
     // Remove scroll lock
     document.body.classList.remove("modal-open");
-    document.documentElement.style.overflow = '';
-    document.body.style.position = '';
-    document.body.style.overflow = '';
-    document.body.style.height = '';
-    
+    document.documentElement.style.overflow = "";
+    document.body.style.position = "";
+    document.body.style.overflow = "";
+    document.body.style.height = "";
+
     // Restore scroll position if needed
     if (this.scrollPosition) {
       window.scrollTo(0, this.scrollPosition);
@@ -630,6 +631,14 @@ class UIController {
 
     let canSpin = false;
 
+    // Check if we're currently spinning
+    if (this.state.isSpinning) {
+      circleEl.classList.add("on-cooldown");
+      buttonEl.disabled = true;
+      buttonEl.style.cursor = "wait";
+      return;
+    }
+
     if (this.state.currentLootbox) {
       if (this.state.currentLootbox.isGroupBox) {
         // For group boxes, check userRemainingTries
@@ -647,15 +656,19 @@ class UIController {
     if (this.state.isOrganizerReadonly) {
       circleEl.classList.add("organizer-readonly");
       buttonEl.disabled = true;
-    } else if (this.state.isOnCooldown) {
+      buttonEl.style.cursor = "not-allowed";
+    } else if (this.state.isOnCooldown || this.state.isSpinning) {
       circleEl.classList.add("on-cooldown");
       buttonEl.disabled = true;
+      buttonEl.style.cursor = this.state.isSpinning ? "wait" : "not-allowed";
     } else if (!canSpin) {
       circleEl.classList.add("on-cooldown");
       buttonEl.disabled = true;
+      buttonEl.style.cursor = "not-allowed";
     } else {
       circleEl.classList.remove("on-cooldown", "organizer-readonly");
       buttonEl.disabled = false;
+      buttonEl.style.cursor = "pointer";
     }
   }
 
@@ -1150,7 +1163,7 @@ class UIController {
 
     const baseOdds = 1 / oddsInputs.length;
     let runningTotal = 0;
-    
+
     oddsInputs.forEach((input, index) => {
       if (index < oddsInputs.length - 1) {
         const value = parseFloat(baseOdds.toFixed(3));
@@ -1179,7 +1192,7 @@ class UIController {
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
 
     let runningTotal = 0;
-    
+
     // Normalize to sum to 1
     weights.forEach((weight, index) => {
       if (index < weights.length - 1) {
@@ -1351,13 +1364,13 @@ class UIController {
       <button class="remove-item-btn" data-action="remove-item" data-index="${itemIndex}">×</button>
     `;
     itemsList.appendChild(itemRow);
-    
+
     // Add event listener for the new odds input
     const oddsInput = itemRow.querySelector(".item-odds");
     if (oddsInput) {
       oddsInput.addEventListener("input", () => this.updateTotalOdds());
     }
-    
+
     this.updateTotalOdds();
   }
 
@@ -1387,7 +1400,7 @@ class UIController {
 
     const baseOdds = 1 / oddsInputs.length;
     let runningTotal = 0;
-    
+
     oddsInputs.forEach((input, index) => {
       if (index < oddsInputs.length - 1) {
         const value = parseFloat(baseOdds.toFixed(3));
@@ -1416,7 +1429,7 @@ class UIController {
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
 
     let runningTotal = 0;
-    
+
     // Normalize to sum to 1
     weights.forEach((weight, index) => {
       if (index < weights.length - 1) {
