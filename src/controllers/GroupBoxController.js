@@ -800,6 +800,15 @@ class GroupBoxController {
       return { success: true, result };
     } catch (error) {
       console.error("Error spinning group box:", error);
+
+      // Check for permission error (expired box)
+      if (error.code === "permission-denied") {
+        return {
+          success: false,
+          errors: ["This group box has expired and cannot be opened"],
+        };
+      }
+
       return { success: false, errors: [error.message] };
     }
   }
