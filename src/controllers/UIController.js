@@ -741,14 +741,7 @@ class UIController {
       itemsList.innerHTML = "";
       if (lootbox.items && lootbox.items.length > 0) {
         lootbox.items.forEach((item) => {
-          this.addItemRow();
-          const lastRow = itemsList.lastElementChild;
-          if (lastRow) {
-            const nameInput = lastRow.querySelector(".item-name");
-            const oddsInput = lastRow.querySelector(".item-odds");
-            if (nameInput) nameInput.value = item.name;
-            if (oddsInput) oddsInput.value = item.odds;
-          }
+          this.addItemRow(item.name, item.odds);
         });
       } else {
         this.addItemRow();
@@ -1302,6 +1295,13 @@ class UIController {
       <button class="remove-item-btn" data-action="remove-item" data-index="${itemIndex}">×</button>
     `;
     itemsList.appendChild(itemRow);
+    
+    // Add event listener for the new odds input
+    const oddsInput = itemRow.querySelector(".item-odds");
+    if (oddsInput) {
+      oddsInput.addEventListener("input", () => this.updateTotalOdds());
+    }
+    
     this.updateTotalOdds();
   }
 
