@@ -179,7 +179,7 @@ class UIController {
     // Update title
     const titleEl = document.getElementById("lootboxTitle");
     if (titleEl) {
-      titleEl.textContent = lootbox.name || lootbox.groupBoxName || "Lootbox";
+      titleEl.textContent = lootbox.groupBoxName || lootbox.name || "Lootbox";
     }
 
     // Update tries info
