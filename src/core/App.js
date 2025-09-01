@@ -176,6 +176,8 @@ class App {
           }
           // Mark as viewed immediately on click to remove "New" badge
           await this.controllers.lootbox.markAsViewed(newIndex);
+          // Set lastInteracted timestamp so it appears at top on refresh
+          await this.controllers.lootbox.setLastInteracted(newIndex);
           await this.controllers.ui.openLootbox(newIndex);
           break;
         case "confirm-delete":
@@ -333,6 +335,8 @@ class App {
         case "open-group-box":
           // Mark group box as viewed immediately on click to remove "New" badge
           await this.markGroupBoxAsViewed(data.id);
+          // Set lastInteracted timestamp so it appears at top on refresh
+          await this.setGroupBoxLastInteracted(data.id);
           await this.controllers.ui.openGroupBox(data.id);
           break;
 
@@ -838,6 +842,21 @@ class App {
       }
     } catch (error) {
       console.error("Error marking group box as viewed:", error);
+    }
+  }
+
+  // Set lastInteracted timestamp for group box
+  async setGroupBoxLastInteracted(groupBoxId) {
+    try {
+      const groupBox = this.controllers.groupBox.getGroupBox(groupBoxId);
+      if (groupBox) {
+        // Set lastInteracted timestamp
+        groupBox.lastInteracted = new Date().toISOString();
+        // Save to local storage
+        await this.controllers.groupBox.saveToLocal();
+      }
+    } catch (error) {
+      console.error("Error setting group box last interacted:", error);
     }
   }
 

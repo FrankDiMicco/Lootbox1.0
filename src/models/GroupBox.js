@@ -30,6 +30,7 @@ class GroupBox extends Lootbox {
         : data.settings?.triesPerPerson || 3;
     this.firstParticipated = data.firstParticipated || null;
     this.lastParticipated = data.lastParticipated || null;
+    this.lastInteracted = data.lastInteracted || null; // Track when user clicked on this group box
 
     // Group statistics
     this.totalOpens = data.totalOpens || 0;
@@ -143,6 +144,7 @@ class GroupBox extends Lootbox {
       userRemainingTries: this.userRemainingTries,
       firstParticipated: this.firstParticipated,
       lastParticipated: this.lastParticipated,
+      lastInteracted: this.lastInteracted,
       totalOpens: this.totalOpens,
       uniqueUsers: this.uniqueUsers,
       expiresIn: this.expiresIn,

@@ -298,6 +298,33 @@ class LootboxController {
     }
   }
 
+  async setLastInteracted(index) {
+    try {
+      if (index < 0 || index >= this.lootboxes.length) {
+        return { success: false };
+      }
+
+      const lootbox = this.lootboxes[index];
+      
+      // Set lastInteracted timestamp
+      lootbox.lastInteracted = new Date().toISOString();
+      lootbox.updatedAt = new Date().toISOString();
+
+      // Save to Firebase if available
+      if (this.firebase.isReady) {
+        await this.firebase.saveLootbox(lootbox.toObject());
+      } else {
+        // Save to localStorage
+        this.saveToLocalStorage();
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error setting lootbox last interacted:", error);
+      return { success: false };
+    }
+  }
+
   generateShareUrl(index) {
     try {
       if (index < 0 || index >= this.lootboxes.length) {

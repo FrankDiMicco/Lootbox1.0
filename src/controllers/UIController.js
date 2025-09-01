@@ -91,6 +91,7 @@ class UIController {
               remainingTries: lb.remainingTries,
               spins: lb.spins,
               lastUsed: lb.lastUsed,
+              lastInteracted: lb.lastInteracted,
               favorite: lb.favorite,
               imported: lb.imported,
               importedAt: lb.importedAt,
@@ -122,6 +123,7 @@ class UIController {
               isOrganizerOnly: gb.isOrganizerOnly,
               userTotalOpens: gb.userTotalOpens,
               viewed: gb.viewed,
+              lastInteracted: gb.lastInteracted,
               userRemainingTries: gb.userRemainingTries,
               totalOpens: gb.totalOpens,
               uniqueUsers: gb.uniqueUsers,
@@ -1629,9 +1631,10 @@ class UIController {
     const bData = b.data;
 
     // Get the most recent activity timestamp for each item
-    // Priority: lastUsed/lastParticipated > createdAt/importedAt/firstParticipated
+    // Priority: lastInteracted (clicked) > lastUsed/lastParticipated (opened/spun) > createdAt/importedAt/firstParticipated
     const aMostRecent = new Date(
-      aData.lastUsed ||
+      aData.lastInteracted ||
+        aData.lastUsed ||
         aData.lastParticipated ||
         aData.createdAt ||
         aData.importedAt ||
@@ -1641,7 +1644,8 @@ class UIController {
     );
 
     const bMostRecent = new Date(
-      bData.lastUsed ||
+      bData.lastInteracted ||
+        bData.lastUsed ||
         bData.lastParticipated ||
         bData.createdAt ||
         bData.importedAt ||

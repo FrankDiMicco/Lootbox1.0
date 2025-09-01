@@ -16,6 +16,7 @@ class Lootbox {
     this.spins = data.spins || 0;
     this.viewed = data.viewed || false;
     this.lastUsed = data.lastUsed || null;
+    this.lastInteracted = data.lastInteracted || null; // Track when user clicked on this lootbox
     this.favorite = data.favorite || false;
     this.imported = data.imported || false;
     this.importedAt = data.importedAt || null;
@@ -134,6 +135,7 @@ class Lootbox {
       spins: this.spins,
       viewed: this.viewed,
       lastUsed: this.lastUsed,
+      lastInteracted: this.lastInteracted,
       favorite: this.favorite,
       imported: this.imported,
       importedAt: this.importedAt,
