@@ -735,8 +735,9 @@ class App {
 
     this.state.pendingDeleteGroupBoxId = groupBoxId;
 
-    if (groupBox.isCreator) {
-      // Show creator delete choice modal
+    // Check if creator AND if they're an organizer-only (didn't participate)
+    if (groupBox.isCreator && groupBox.isOrganizerOnly) {
+      // Show creator delete choice modal with both options
       const modal = document.getElementById("creatorDeleteModal");
       const nameEl = document.getElementById("creatorDeleteBoxName");
       if (modal && nameEl) {
@@ -744,7 +745,8 @@ class App {
         modal.classList.add("show");
       }
     } else {
-      // Show regular delete modal for participants
+      // For creators who participated OR regular participants,
+      // show regular delete modal (leave only)
       const modal = document.getElementById("deleteModal");
       const nameEl = document.getElementById("deleteLootboxName");
       const deleteBtn = modal?.querySelector('[data-action="confirm-delete"]');
@@ -835,14 +837,17 @@ class App {
       if (groupBox && !groupBox.viewed) {
         // Mark it as viewed
         groupBox.viewed = true;
-        
+
         // Save to Firebase if available
-        if (this.controllers.groupBox.firebase && this.controllers.groupBox.firebase.isReady) {
+        if (
+          this.controllers.groupBox.firebase &&
+          this.controllers.groupBox.firebase.isReady
+        ) {
           await this.controllers.groupBox.updateParticipantData(groupBoxId, {
-            viewed: true
+            viewed: true,
           });
         }
-        
+
         // Also save to local storage
         await this.controllers.groupBox.save();
         // Force re-render to update the UI
@@ -860,14 +865,17 @@ class App {
       if (groupBox) {
         // Set lastInteracted timestamp
         groupBox.lastInteracted = new Date().toISOString();
-        
+
         // Save to Firebase if available
-        if (this.controllers.groupBox.firebase && this.controllers.groupBox.firebase.isReady) {
+        if (
+          this.controllers.groupBox.firebase &&
+          this.controllers.groupBox.firebase.isReady
+        ) {
           await this.controllers.groupBox.updateParticipantData(groupBoxId, {
-            lastInteracted: groupBox.lastInteracted
+            lastInteracted: groupBox.lastInteracted,
           });
         }
-        
+
         // Also save to local storage
         await this.controllers.groupBox.save();
       }

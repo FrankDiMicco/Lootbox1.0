@@ -76,12 +76,14 @@ class GroupBoxController {
             lastParticipated: data.lastParticipated,
 
             // Group statistics
-            totalOpens: (data.totalOpens ?? data.totalSpins ?? 0), // legacy name kept
-            uniqueUsers: (data.uniqueUsers ?? 0),
-            totalSpins: (data.totalSpins ?? data.totalOpens ?? 0),
+            totalOpens: data.totalOpens ?? data.totalSpins ?? 0, // legacy name kept
+            uniqueUsers: data.uniqueUsers ?? 0,
+            totalSpins: data.totalSpins ?? data.totalOpens ?? 0,
             activeUsers: Array.isArray(data.participants)
-              ? data.participants.filter(p => !p?.hasLeft).length
-              : (typeof data.activeUsers === "number" ? data.activeUsers : 0),
+              ? data.participants.filter((p) => !p?.hasLeft).length
+              : typeof data.activeUsers === "number"
+              ? data.activeUsers
+              : 0,
 
             // Other properties
             favorite: data.favorite || false,
@@ -869,21 +871,60 @@ class GroupBoxController {
 
       // If we're here, the group box exists in Firebase
       if (deleteForEveryone && groupBox.isCreator) {
-        // Delete the group box from Firebase (for everyone)
-        const { deleteDoc, doc } = window.firebaseFunctions;
-        await deleteDoc(doc(this.firebase.db, "group_boxes", groupBoxId));
+        // Only actually delete from Firebase if creator is organizer-only
+        // (didn't participate in their own box)
+        if (groupBox.isOrganizerOnly) {
+          // Delete the group box from Firebase (for everyone)
+          const { deleteDoc, doc } = window.firebaseFunctions;
+          await deleteDoc(doc(this.firebase.db, "group_boxes", groupBoxId));
 
-        // Also delete the participation record
-        if (groupBox.id) {
-          await deleteDoc(
-            doc(
-              this.firebase.db,
-              "users",
-              currentUser.uid,
-              "participated_group_boxes",
+          // Also delete the participation record
+          if (groupBox.id) {
+            await deleteDoc(
+              doc(
+                this.firebase.db,
+                "users",
+                currentUser.uid,
+                "participated_group_boxes",
+                groupBox.id
+              )
+            );
+          }
+        } else {
+          // Creator participated - just hide it like leaving
+          // Mark as left in their participation record but don't delete the main box
+          if (groupBox.id) {
+            console.log(
+              "Creator leaving but not deleting group box:",
               groupBox.id
-            )
-          );
+            );
+            const { updateDoc, doc } = window.firebaseFunctions;
+            await updateDoc(
+              doc(
+                this.firebase.db,
+                "users",
+                currentUser.uid,
+                "participated_group_boxes",
+                groupBox.id
+              ),
+              {
+                hasLeft: true,
+                leftAt: new Date().toISOString(),
+                userRemainingTries: groupBox.userRemainingTries,
+                userTotalOpens: groupBox.userTotalOpens,
+              }
+            );
+          }
+
+          // Record leave event
+          const userName = currentUser.displayName || currentUser.uid;
+          await this.firebase.addSessionHistoryEvent(groupBoxId, {
+            type: "leave",
+            userId: currentUser.uid,
+            userName: userName,
+            message: `${userName.substring(0, 5)} has left the box`,
+            timestamp: new Date().toISOString(),
+          });
         }
       } else {
         // User is leaving but NOT deleting for everyone
