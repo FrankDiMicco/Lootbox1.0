@@ -202,6 +202,20 @@ class GroupBoxController {
         return { success: false, errors: ["User not authenticated"] };
       }
 
+      // Build participants array with creator if they're participating
+      const participants = [];
+      if (settings.creatorParticipates) {
+        participants.push({
+          userId: currentUser.uid,
+          userName: currentUser.displayName || "Anonymous",
+          userTotalOpens: 0,
+          userRemainingTries: settings.unlimitedGroupTries
+            ? "unlimited"
+            : settings.triesPerPerson,
+          joinedAt: new Date().toISOString(),
+        });
+      }
+
       const groupBoxData = {
         lootboxData: {
           ...lootboxData,
@@ -211,6 +225,7 @@ class GroupBoxController {
         createdBy: currentUser.uid,
         creatorName: currentUser.displayName || "Anonymous",
         organizerOnly: !settings.creatorParticipates,
+        participants: participants, // Use the array we built above
         settings: {
           triesPerPerson: settings.unlimitedGroupTries
             ? "unlimited"
@@ -220,9 +235,8 @@ class GroupBoxController {
           creatorParticipates: settings.creatorParticipates,
           expiresIn: settings.expiresIn,
         },
-        participants: [],
         totalOpens: 0,
-        uniqueUsers: 0,
+        uniqueUsers: settings.creatorParticipates ? 1 : 0,
         createdAt: new Date().toISOString(),
       };
 
@@ -235,6 +249,14 @@ class GroupBoxController {
       }
 
       // Save to Firebase
+      console.log(
+        "About to save group box with participants:",
+        groupBoxData.participants
+      );
+      console.log(
+        "Full groupBoxData being saved:",
+        JSON.stringify(groupBoxData, null, 2)
+      );
       const groupBoxId = await this.firebase.saveGroupBox(groupBoxData);
       if (!groupBoxId) {
         throw new Error("Failed to create group box ID");
@@ -242,8 +264,8 @@ class GroupBoxController {
 
       const groupBox = new GroupBox({
         ...groupBoxData,
-        id: groupBoxId, // ADD THIS
-        groupBoxId: groupBoxId, // Make sure this is here
+        id: groupBoxId,
+        groupBoxId: groupBoxId,
         groupBoxName: lootboxData.name,
         items: lootboxData.items,
         isCreator: true,
@@ -259,8 +281,7 @@ class GroupBoxController {
       this.groupBoxes.push(groupBox);
       await this.save();
 
-      // If creator participates, record their join
-      // If creator participates, also create a participant record for them
+      // If creator participates, also create their personal participation record
       if (settings.creatorParticipates) {
         const { setDoc, doc } = window.firebaseFunctions;
 
@@ -274,7 +295,7 @@ class GroupBoxController {
           createdBy: currentUser.uid,
           creatorName: currentUser.displayName || "Anonymous",
           totalOpens: 0,
-          uniqueUsers: 0,
+          uniqueUsers: 1,
           firstParticipated: new Date().toISOString(),
           userTotalOpens: 0,
           userRemainingTries: settings.unlimitedGroupTries
@@ -284,19 +305,6 @@ class GroupBoxController {
           isOrganizerOnly: false,
           favorite: false,
         };
-        console.log(
-          "Trying to write to:",
-          `users/${currentUser.uid}/participated_group_boxes/${groupBoxId}`
-        );
-        console.log("Current user:", currentUser.uid);
-        console.log("About to setDoc with:");
-        console.log("  User ID:", currentUser.uid);
-        console.log("  Group Box ID:", groupBoxId);
-        console.log(
-          "  Path:",
-          `users/${currentUser.uid}/participated_group_boxes/${groupBoxId}`
-        );
-        console.log("  Data:", participantData);
 
         await setDoc(
           doc(
@@ -310,21 +318,12 @@ class GroupBoxController {
           { merge: true }
         );
 
-        // Update the local group box with the document ID
-        groupBox.id = groupBoxId;
-        this.groupBoxes[this.groupBoxes.length - 1].id = groupBoxId;
-        const index = this.groupBoxes.findIndex(
-          (gb) => gb.groupBoxId === groupBoxId
-        );
-        if (index >= 0) {
-          this.groupBoxes[index].id = groupBoxId;
-        }
         // Record join event for creator
         await this.firebase.addSessionHistoryEvent(groupBoxId, {
           type: "join",
           userId: currentUser.uid,
-          userName: currentUser.uid,
-          message: `${(currentUser.displayName || currentUser.uid).substring(
+          userName: currentUser.displayName || "Anonymous",
+          message: `${(currentUser.displayName || "Anonymous").substring(
             0,
             5
           )} joined the box`,

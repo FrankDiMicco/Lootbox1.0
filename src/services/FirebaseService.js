@@ -163,64 +163,81 @@ class FirebaseService {
       throw new Error("Firebase not ready or user not authenticated");
     }
 
-    const docRef = await addDoc(collection(this.db, "group_boxes"), data);
-    console.log("Created group box in Firebase:", docRef.id);
+    console.log("FirebaseService.saveGroupBox - Received data:", data);
+    console.log(
+      "FirebaseService.saveGroupBox - Participants:",
+      data.participants
+    );
+
+    // Create a clean copy of the data to ensure it's saved properly
+    const groupBoxToSave = {
+      ...data,
+      participants: data.participants || [],
+      updatedAt: new Date().toISOString(),
+    };
+
+    console.log(
+      "FirebaseService.saveGroupBox - About to save:",
+      groupBoxToSave
+    );
+
+    const docRef = await addDoc(
+      collection(this.db, "group_boxes"),
+      groupBoxToSave
+    );
+    console.log("Created group box in Firebase with ID:", docRef.id);
+
+    // Verify what was saved by reading it back
+    const savedDoc = await getDoc(docRef);
+    console.log("Verification - What was actually saved:", savedDoc.data());
+    console.log(
+      "Verification - Participants in saved doc:",
+      savedDoc.data().participants
+    );
+
     return docRef.id;
   }
 
-  async loadGroupBox(id) {
-    if (!this.isReady) {
-      throw new Error("Firebase not ready");
+  async saveGroupBox(data) {
+    if (!this.isReady || !this.getCurrentUser()) {
+      throw new Error("Firebase not ready or user not authenticated");
     }
 
-    const boxRef = doc(this.db, "group_boxes", id);
-    const boxSnap = await getDoc(boxRef);
-    if (!boxSnap.exists()) {
-      throw new Error("Group box not found");
-    }
+    console.log("FirebaseService.saveGroupBox - Received data:", data);
+    console.log(
+      "FirebaseService.saveGroupBox - Participants:",
+      data.participants
+    );
 
-    const data = { id: boxSnap.id, ...boxSnap.data() };
+    // Create a clean copy of the data to ensure it's saved properly
+    const groupBoxToSave = {
+      ...data,
+      participants: data.participants || [],
+      updatedAt: new Date().toISOString(),
+    };
 
-    // DO NOT log "join" here.
-    // If the user is already participating, just bump lastSeenAt (no new record)
-    // and mirror remaining/opens into their own user doc.
-    const user = this.getCurrentUser();
-    if (user) {
-      const partRef = doc(
-        this.db,
-        "users",
-        user.uid,
-        "participated_group_boxes",
-        id
+    console.log(
+      "FirebaseService.saveGroupBox - About to save:",
+      groupBoxToSave
+    );
+
+    const docRef = await addDoc(
+      collection(this.db, "group_boxes"),
+      groupBoxToSave
+    );
+    console.log("Created group box in Firebase with ID:", docRef.id);
+
+    // Verify what was saved by reading it back
+    const savedDoc = await getDoc(docRef);
+    if (savedDoc.exists()) {
+      console.log("Verification - What was actually saved:", savedDoc.data());
+      console.log(
+        "Verification - Participants in saved doc:",
+        savedDoc.data().participants
       );
-      const partSnap = await getDoc(partRef);
-      if (partSnap.exists()) {
-        await setDoc(
-          partRef,
-          { lastSeenAt: serverTimestamp() },
-          { merge: true }
-        );
-      }
-
-      // Mirror from shared participants -> my personal record
-      const me = (data.participants || []).find((p) => p.userId === user.uid);
-      if (me) {
-        await setDoc(
-          partRef,
-          {
-            groupBoxId: id,
-            groupBoxName: data.lootboxData?.name || data.name || "",
-            userRemainingTries: me.userRemainingTries ?? 0,
-            userTotalOpens: me.userTotalOpens ?? 0,
-            lastSeenAt: serverTimestamp(),
-            isGroupBox: true,
-          },
-          { merge: true }
-        );
-      }
     }
 
-    return data;
+    return docRef.id;
   }
 
   async recordSpin(lootboxId, result) {
@@ -656,6 +673,15 @@ class FirebaseService {
       console.error("hideParticipatedGroupBox failed:", e);
       return false;
     }
+  }
+  async loadGroupBox(groupBoxId) {
+    if (!this.isReady) throw new Error("Firebase not ready");
+    const { doc, getDoc } = window.firebaseFunctions;
+    const ref = doc(this.db, "group_boxes", groupBoxId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null; // return null if missing
+    const data = snap.data();
+    return { id: groupBoxId, groupBoxId, ...data }; // normalize ids
   }
 }
 

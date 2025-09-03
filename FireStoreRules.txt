@@ -25,10 +25,8 @@ service cloud.firestore {
       allow create: if request.auth != null 
                     && request.auth.uid == request.resource.data.createdBy;
       
-      // Update: allow authenticated users ONLY if not expired
-      allow update: if request.auth != null && 
-                    (!('expiresAt' in resource.data) || 
-                     resource.data.expiresAt > request.time);
+      // Update: allow authenticated users
+      allow update: if request.auth != null;
       
       // Delete: only creator
       allow delete: if request.auth != null 
@@ -37,30 +35,21 @@ service cloud.firestore {
       // Sub-collection: opens (anyone can read/create opens)
       match /opens/{openId} {
         allow read: if true;
-        // Only allow creating opens if group box not expired
-        allow create: if !isGroupBoxExpired();
-        allow update, delete: if false; // Opens are permanent
+        allow create: if request.auth != null;
+        allow update, delete: if false;
       }
       
       // Sub-collection: user tries tracking
       match /user_tries/{userId} {
         allow read: if true;
-        // Only allow writing if group box not expired
-        allow write: if !isGroupBoxExpired();
+        allow write: if request.auth != null;
       }
       
-      // Sub-collection: session history
+      // Sub-collection: session history - THIS IS THE FIX
       match /session_history/{historyId} {
-        allow read: if request.auth != null;
-        // Only allow writing history if not expired
-        allow write: if request.auth != null && !isGroupBoxExpired();
-      }
-      
-      // Helper function to check parent group box expiration
-      function isGroupBoxExpired() {
-        let groupBox = get(/databases/$(database)/documents/group_boxes/$(groupBoxId));
-        return 'expiresAt' in groupBox.data && 
-               groupBox.data.expiresAt <= request.time;
+        allow read: if true;
+        allow create: if request.auth != null;
+        allow update, delete: if false;
       }
     }
     

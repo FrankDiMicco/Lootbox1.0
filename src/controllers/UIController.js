@@ -339,6 +339,7 @@ class UIController {
 
   async openGroupBox(groupBoxId) {
     console.log("Opening group box:", groupBoxId);
+    let groupBox = this.groupBoxController.getGroupBox(groupBoxId);
 
     if (this.lootboxController.firebase.isReady) {
       console.log("Firebase is ready, attempting refresh...");
@@ -359,7 +360,7 @@ class UIController {
           console.log("Found participant:", freshParticipant);
 
           if (freshParticipant) {
-            const groupBox = this.groupBoxController.getGroupBox(groupBoxId);
+            groupBox = this.groupBoxController.getGroupBox(groupBoxId);
             console.log("Local group box before update:", groupBox);
 
             if (groupBox) {
@@ -400,17 +401,17 @@ class UIController {
       console.log("Firebase not ready!");
     }
 
-    const groupBox = this.groupBoxController.getGroupBox(groupBoxId);
     if (!groupBox) {
-      // Try to check if it still exists in Firebase
-      try {
-        await this.lootboxController.firebase.loadGroupBox(groupBoxId);
-      } catch (error) {
+      const exists = await this.lootboxController.firebase.loadGroupBox(
+        groupBoxId
+      );
+      if (!exists) {
         this.showToast("This group box was deleted by the creator", "error");
         this.showListView();
         return;
       }
     }
+
     if (groupBox) {
       this.state.currentView = "lootbox";
       this.state.currentLootbox = groupBox;
@@ -1095,7 +1096,8 @@ class UIController {
       usersList.onclick = null;
 
       usersList.onclick = async (e) => {
-        const btn = e.target.closest('[data-action="adjust-tries"]');
+        const btn = e.target.closest('[data-action="adjust-tries-display"]');
+
         if (!btn || btn.disabled) return;
 
         console.log("UIController button click detected");
@@ -1270,6 +1272,8 @@ class UIController {
   async saveGroupBoxChanges() {
     console.log("saveGroupBoxChanges called");
     const groupBoxId = this.state.currentEditGroupBoxId;
+    const groupBox = this.groupBoxController.getGroupBox(groupBoxId);
+
     console.log("currentEditGroupBoxId:", groupBoxId);
     if (!groupBoxId) {
       console.log("No groupBoxId found");
@@ -1277,7 +1281,6 @@ class UIController {
       return;
     }
 
-    const groupBox = this.groupBoxController.getGroupBox(groupBoxId);
     console.log("Found groupBox:", groupBox);
     if (!groupBox) {
       console.log("GroupBox not found");
