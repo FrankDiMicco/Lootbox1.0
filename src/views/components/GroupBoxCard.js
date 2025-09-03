@@ -1,6 +1,7 @@
 /**
  * GroupBoxCard component for rendering group box cards
  */
+// - totalSpins (number)            → preferred for "Total opens"
 class GroupBoxCard {
   /**
    * Generate HTML for a group box card
@@ -130,11 +131,18 @@ class GroupBoxCard {
    * @returns {Object} Calculated statistics
    */
   static calculateCommunityStats(groupBox) {
-    // If we have a totalSpins counter from Firebase, use that
-    if (groupBox.totalSpins !== undefined) {
+    // Prefer live counters on the doc
+    const users =
+      typeof groupBox.activeUsers === "number"
+        ? groupBox.activeUsers
+        : Array.isArray(groupBox.participants)
+          ? groupBox.participants.filter((p) => !p?.hasLeft).length
+          : groupBox.uniqueUsers || 0;
+
+    if (groupBox.totalSpins !== undefined || groupBox.totalOpens !== undefined) {
       return {
-        uniqueUsers: groupBox.uniqueUsers || 0,
-        totalOpens: groupBox.totalSpins || 0,
+        uniqueUsers: users,
+        totalOpens: groupBox.totalSpins ?? groupBox.totalOpens ?? 0,
       };
     }
 

@@ -76,8 +76,12 @@ class GroupBoxController {
             lastParticipated: data.lastParticipated,
 
             // Group statistics
-            totalOpens: data.totalOpens || 0,
-            uniqueUsers: data.uniqueUsers || 0,
+            totalOpens: (data.totalOpens ?? data.totalSpins ?? 0), // legacy name kept
+            uniqueUsers: (data.uniqueUsers ?? 0),
+            totalSpins: (data.totalSpins ?? data.totalOpens ?? 0),
+            activeUsers: Array.isArray(data.participants)
+              ? data.participants.filter(p => !p?.hasLeft).length
+              : (typeof data.activeUsers === "number" ? data.activeUsers : 0),
 
             // Other properties
             favorite: data.favorite || false,

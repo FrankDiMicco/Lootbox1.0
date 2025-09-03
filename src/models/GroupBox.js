@@ -147,6 +147,8 @@ class GroupBox extends Lootbox {
       lastInteracted: this.lastInteracted,
       totalOpens: this.totalOpens,
       uniqueUsers: this.uniqueUsers,
+      totalSpins: this.totalSpins,
+      activeUsers: this.activeUsers,
       expiresIn: this.expiresIn,
       expiresAt: this.expiresAt,
       participants: this.participants,

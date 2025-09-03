@@ -128,8 +128,11 @@ class UIController {
               viewed: gb.viewed,
               lastInteracted: gb.lastInteracted,
               userRemainingTries: gb.userRemainingTries,
-              totalOpens: gb.totalOpens,
-              uniqueUsers: gb.uniqueUsers,
+              totalOpens: gb.totalOpens,        // legacy field (fallback)
+              uniqueUsers: gb.uniqueUsers,      // legacy field (fallback)
+              activeUsers: gb.activeUsers,      // preferred for “Users”
+              totalSpins: gb.totalSpins,        // preferred for “Total opens”
+              participants: gb.participants,    // fallback if counters absent
               favorite: gb.favorite,
               revealContents: gb.revealContents,
               revealOdds: gb.revealOdds,
@@ -178,6 +181,9 @@ class UIController {
           })),
       ];
     }
+
+    // Expose for quick inspection during development
+    window.__lastItems = allItems; // DEBUG: inspect list render data in console
 
     // Sort items
     allItems.sort(this.sortItemsByUsage);

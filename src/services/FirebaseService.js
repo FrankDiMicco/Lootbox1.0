@@ -20,7 +20,7 @@ import {
   serverTimestamp,
   arrayUnion,
   increment,
-  onSnapshot
+  onSnapshot,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
 class FirebaseService {
@@ -71,7 +71,7 @@ class FirebaseService {
         serverTimestamp,
         arrayUnion,
         increment,
-        onSnapshot
+        onSnapshot,
       };
 
       // Sign in anonymously and perform smoke test
@@ -214,9 +214,11 @@ class FirebaseService {
       throw new Error("Firebase not ready or user not authenticated");
     }
 
+    const { doc, getDoc, collection, getDocs, query, where } =
+      window.firebaseFunctions;
     const currentUser = this.getCurrentUser();
 
-    // Query 1: Boxes where participants contains my uid
+    // --- Participated boxes (from user's subcollection) ---
     const participatedRef = collection(
       this.db,
       "users",
@@ -224,65 +226,77 @@ class FirebaseService {
       "participated_group_boxes"
     );
     const participatedSnapshot = await getDocs(participatedRef);
+
     const participatedBoxes = [];
-    const toDelete = []; // Track participation records to delete
+    const toDelete = [];
 
     for (const docSnap of participatedSnapshot.docs) {
       const data = docSnap.data();
 
-      // Skip if user hid or left
+      // Skip if user hid/left
       if (data.hiddenByUser === true || data.hasLeft === true) continue;
 
-      // Check existence once
-      let groupBoxExists = true;
+      // Load canonical group box doc once
+      let gbData = null;
       try {
-        const groupBoxRef = doc(this.db, "group_boxes", data.groupBoxId);
-        const groupBoxSnap = await getDoc(groupBoxRef);
-        groupBoxExists = groupBoxSnap.exists();
+        const gbRef = doc(this.db, "group_boxes", data.groupBoxId);
+        const gbSnap = await getDoc(gbRef);
+        if (!gbSnap.exists()) {
+          toDelete.push(docSnap.id);
+          continue;
+        }
+        gbData = gbSnap.data();
       } catch {
-        groupBoxExists = false;
+        toDelete.push(docSnap.id);
+        continue;
       }
 
-      if (groupBoxExists) {
-        participatedBoxes.push({
-          id: docSnap.id,
-          ...data,
-          isGroupBox: true,
-        });
-      } else {
-        console.log(
-          `Group box ${data.groupBoxId} no longer exists, cleaning up participation record`
-        );
-        toDelete.push(docSnap.id);
-      }
+      const participants = Array.isArray(gbData?.participants)
+        ? gbData.participants
+        : [];
+      const activeUsers = participants.filter((p) => !p?.hasLeft).length;
+      const totalSpins =
+        typeof gbData?.totalSpins === "number" ? gbData.totalSpins : 0;
+
+      participatedBoxes.push({
+        id: docSnap.id,
+        ...data,
+        isGroupBox: true,
+        // enrich for cards
+        participants,
+        activeUsers,
+        totalSpins,
+        // legacy fallbacks if present
+        totalOpens:
+          typeof gbData?.totalOpens === "number"
+            ? gbData.totalOpens
+            : undefined,
+        uniqueUsers:
+          typeof gbData?.uniqueUsers === "number"
+            ? gbData.uniqueUsers
+            : undefined,
+      });
     }
 
     // Clean up orphaned participation records
-    for (const docId of toDelete) {
+    for (const deadId of toDelete) {
       try {
-        await deleteDoc(
+        await window.firebaseFunctions.deleteDoc(
           doc(
             this.db,
             "users",
             currentUser.uid,
             "participated_group_boxes",
-            docId
+            deadId
           )
         );
-        console.log(`Deleted orphaned participation record: ${docId}`);
-      } catch (error) {
-        console.error(`Failed to delete orphaned record ${docId}:`, error);
+        console.log(`Deleted orphaned participation record: ${deadId}`);
+      } catch (e) {
+        console.error(`Failed to delete orphaned record ${deadId}:`, e);
       }
     }
 
-    console.log(`Loaded ${participatedBoxes.length} participated group boxes`);
-    if (toDelete.length > 0) {
-      console.log(
-        `Cleaned up ${toDelete.length} orphaned participation records`
-      );
-    }
-
-    // Query 2: Boxes where createdBy == my uid AND organizerOnly == true
+    // --- Organizer-only boxes created by me (show in list with counters) ---
     const organizerRef = collection(this.db, "group_boxes");
     const organizerQuery = query(
       organizerRef,
@@ -290,54 +304,54 @@ class FirebaseService {
       where("organizerOnly", "==", true)
     );
     const organizerSnapshot = await getDocs(organizerQuery);
-    const organizerBoxes = [];
 
-    organizerSnapshot.forEach((doc) => {
-      const data = doc.data();
+    const organizerBoxes = [];
+    organizerSnapshot.forEach((d) => {
+      const gb = d.data();
+      const participants = Array.isArray(gb?.participants)
+        ? gb.participants
+        : [];
+      const activeUsers = participants.filter((p) => !p?.hasLeft).length;
+      const totalSpins = typeof gb?.totalSpins === "number" ? gb.totalSpins : 0;
+
       organizerBoxes.push({
-        id: doc.id,
-        groupBoxId: doc.id,
-        groupBoxName: data.lootboxData?.name || data.name,
-        lootboxData: data.lootboxData,
-        settings: data.settings,
-        createdBy: data.createdBy,
-        creatorName: data.creatorName,
-        totalOpens: data.totalOpens || 0,
-        uniqueUsers: data.uniqueUsers || 0,
-        firstParticipated: data.createdAt,
-        lastParticipated: data.createdAt,
-        userTotalOpens: 0, // Organizer hasn't opened any
-        userRemainingTries: 0, // Organizer has no tries
+        id: d.id,
+        groupBoxId: d.id,
+        groupBoxName: gb.lootboxData?.name || gb.name,
+        lootboxData: gb.lootboxData,
+        settings: gb.settings,
+        createdBy: gb.createdBy,
+        creatorName: gb.creatorName,
         isCreator: true,
         isOrganizerOnly: true,
         favorite: false,
         isGroupBox: true,
+        // enrich for cards
+        participants,
+        activeUsers,
+        totalSpins,
+        // legacy fallbacks if present
+        totalOpens: typeof gb?.totalOpens === "number" ? gb.totalOpens : 0,
+        uniqueUsers: typeof gb?.uniqueUsers === "number" ? gb.uniqueUsers : 0,
+        firstParticipated: gb.createdAt,
+        lastParticipated: gb.createdAt,
+        userTotalOpens: 0,
+        userRemainingTries: 0,
       });
     });
 
-    console.log(`Loaded ${organizerBoxes.length} organizer-only group boxes`);
-
-    // Merge both result sets, avoiding duplicates
-    const allGroupBoxes = [...participatedBoxes];
-    organizerBoxes.forEach((organizerBox) => {
-      // Check if this box is already in participated boxes
-      const existingIndex = allGroupBoxes.findIndex(
-        (pb) => pb.groupBoxId === organizerBox.groupBoxId
-      );
-      if (existingIndex === -1) {
-        allGroupBoxes.push(organizerBox);
-      } else {
-        // Update existing entry to ensure it has organizer flags
-        allGroupBoxes[existingIndex] = {
-          ...allGroupBoxes[existingIndex],
-          ...organizerBox,
-        };
-      }
+    // Merge, avoiding duplicates by groupBoxId
+    const all = [...participatedBoxes];
+    organizerBoxes.forEach((o) => {
+      const i = all.findIndex((x) => x.groupBoxId === o.groupBoxId);
+      if (i === -1) all.push(o);
+      else all[i] = { ...all[i], ...o };
     });
 
-    console.log(`Total merged group boxes: ${allGroupBoxes.length}`);
-    return allGroupBoxes;
+    console.log(`Total merged group boxes: ${all.length}`);
+    return all;
   }
+
   async loadChestManifest() {
     if (!this.isReady) {
       throw new Error("Firebase not ready");
