@@ -524,60 +524,23 @@ class UIController {
       (events) => {
         this.state.groupBoxHistories.set(groupBoxId, events);
         this.state.communityHistory = events;
+
+        // NEW: optimistic total pulls for watchers
+        if (this.state.currentLootbox?.isGroupBox) {
+          const spins = events.filter((e) => e.type === "spin").length;
+          // if doc hasn’t updated yet or shows smaller value, show the bigger one
+          const shown = Number(this.state.currentLootbox.totalSpins ?? 0);
+          if (spins > shown) {
+            this.state.currentLootbox.totalSpins = spins;
+          }
+        }
+
         this.updateSessionDisplay();
       }
     );
   }
 
-  async refreshGroupBoxHistory(groupBoxId) {
-    if (!this.lootboxController.firebase.isReady) return;
-
-    try {
-      const sharedHistory =
-        await this.lootboxController.firebase.getSessionHistory(groupBoxId);
-
-      // Check if there's a recent refresh_tries event for current user
-      const currentUser = this.lootboxController.firebase.getCurrentUser();
-      const recentRefresh = sharedHistory.find(
-        (event) =>
-          event.type === "refresh_tries" &&
-          event.userId === currentUser?.uid &&
-          new Date() - new Date(event.timestamp) < 20000 // Within last 20 seconds
-      );
-
-      if (
-        recentRefresh ||
-        sharedHistory.length !== this.state.communityHistory?.length
-      ) {
-        // Reload group box data to get fresh tries
-        const freshData = await this.lootboxController.firebase.loadGroupBox(
-          groupBoxId
-        );
-        const freshParticipant = freshData?.participants?.find(
-          (p) => p.userId === currentUser?.uid
-        );
-
-        if (freshParticipant && this.state.currentLootbox) {
-          this.state.currentLootbox.userRemainingTries =
-            freshParticipant.userRemainingTries;
-
-          // Update UI
-          const triesEl = document.getElementById("triesInfo");
-          if (triesEl) {
-            triesEl.textContent = `Tries remaining: ${freshParticipant.userRemainingTries}`;
-          }
-          this.updateLootboxInteractivity();
-        }
-      }
-
-      // Update history display
-      this.state.groupBoxHistories.set(groupBoxId, sharedHistory);
-      this.state.communityHistory = sharedHistory;
-      this.updateSessionDisplay();
-    } catch (error) {
-      console.error("Error refreshing group box history:", error);
-    }
-  }
+  
 
   setFilter(filter) {
     this.state.currentFilter = filter;

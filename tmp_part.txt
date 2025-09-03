@@ -1,0 +1,126 @@
+      }
+    );
+  }
+
+  async refreshGroupBoxHistory(groupBoxId) {
+    if (!this.lootboxController.firebase.isReady) return;
+
+    try {
+      const sharedHistory =
+        await this.lootboxController.firebase.getSessionHistory(groupBoxId);
+
+      // Check if there's a recent refresh_tries event for current user
+      const currentUser = this.lootboxController.firebase.getCurrentUser();
+      const recentRefresh = sharedHistory.find(
+        (event) =>
+          event.type === "refresh_tries" &&
+          event.userId === currentUser?.uid &&
+          new Date() - new Date(event.timestamp) < 20000 // Within last 20 seconds
+      );
+
+      if (
+        recentRefresh ||
+        sharedHistory.length !== this.state.communityHistory?.length
+      ) {
+        // Reload group box data to get fresh tries
+        const freshData = await this.lootboxController.firebase.loadGroupBox(
+          groupBoxId
+        );
+        const freshParticipant = freshData?.participants?.find(
+          (p) => p.userId === currentUser?.uid
+        );
+
+        if (freshParticipant && this.state.currentLootbox) {
+          this.state.currentLootbox.userRemainingTries =
+            freshParticipant.userRemainingTries;
+
+          // Update UI
+          const triesEl = document.getElementById("triesInfo");
+          if (triesEl) {
+            triesEl.textContent = `Tries remaining: ${freshParticipant.userRemainingTries}`;
+          }
+          this.updateLootboxInteractivity();
+        }
+      }
+
+      // Update history display
+      this.state.groupBoxHistories.set(groupBoxId, sharedHistory);
+      this.state.communityHistory = sharedHistory;
+      this.updateSessionDisplay();
+    } catch (error) {
+      console.error("Error refreshing group box history:", error);
+    }
+  }
+
+  setFilter(filter) {
+    this.state.currentFilter = filter;
+    // Update active button
+    document.querySelectorAll(".filter-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.filter === filter);
+    });
+    this.render();
+  }
+
+  updateSessionDisplay() {
+    const historyList = document.getElementById("historyList");
+    if (!historyList) return;
+
+    const history = this.state.currentLootbox?.isGroupBox
+      ? this.state.communityHistory
+      : this.state.sessionHistory;
+
+    if (history.length === 0) {
+      historyList.innerHTML =
+        '<div class="no-history">No activity yet this session</div>';
+    } else {
+      historyList.innerHTML = history
+        .slice(0, 50)
+        .map((entry) => {
+          const timeStr = new Date(entry.timestamp).toLocaleTimeString();
+
+          // Handle different event types for group boxes
+          if (this.state.currentLootbox?.isGroupBox && entry.type) {
+            // Skip refresh_tries events - they're internal only
+            if (entry.type === "refresh_tries") {
+              return ""; // Return empty string to skip this entry
+            }
+            let displayText = entry.message || "";
+            let cssClass = "history-item";
+
+            // Ensure entry properties are not null
+            const safeUserName = entry.userName || "Unknown User";
+            const safeItem = entry.item || "unknown item";
+
+            switch (entry.type) {
+              case "join":
+                cssClass += " history-join";
+                displayText =
+                  entry.message ||
+                  `${safeUserName.substring(0, 5)} joined the box`;
+                break;
+              case "leave":
+                cssClass += " history-leave";
+                displayText =
+                  entry.message ||
+                  `${safeUserName.substring(0, 5)} left the box`;
+                break;
+              case "spin":
+                cssClass += " history-spin";
+                displayText =
+                  entry.message ||
+                  `${safeUserName.substring(0, 5)} got "${safeItem}"`;
+                break;
+              case "grant":
+                cssClass += " history-grant";
+                displayText =
+                  entry.message ||
+                  `Granted tries to ${safeUserName.substring(0, 5)}`;
+                break;
+              default:
+                displayText = entry.message || safeItem;
+            }
+
+            return `
+                    <div class="${cssClass}">
+                        <div class="history-item-name">${displayText}</div>
+                        <div class="history-item-time">${timeStr}</div>
