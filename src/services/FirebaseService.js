@@ -442,13 +442,21 @@ class FirebaseService {
     try {
       const { collection, addDoc, serverTimestamp } = window.firebaseFunctions;
 
-      // Ensure all required fields are present
+      // Normalize event record (renderer handles masking)
+      const uid = eventData.userId || this.getCurrentUser()?.uid;
+      if (!uid) throw new Error("No userId available for session history event");
+
       const eventRecord = {
         type: eventData.type || "unknown",
-        userId: eventData.userId || this.getCurrentUser()?.uid || "anonymous",
-        userName: eventData.userName || "Unknown User",
+        userId: uid,
+        userName:
+          (eventData.userName || this.getCurrentUser()?.displayName || "").trim(),
         item: eventData.item || null,
-        message: eventData.message || "",
+        // Never persist message for join/leave; UI formats text
+        message:
+          eventData.type === "join" || eventData.type === "leave"
+            ? ""
+            : eventData.message || "",
         timestamp: serverTimestamp(),
         createdAt: new Date().toISOString(),
       };

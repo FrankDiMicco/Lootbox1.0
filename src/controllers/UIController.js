@@ -580,25 +580,31 @@ class UIController {
             if (entry.type === "refresh_tries") {
               return ""; // Return empty string to skip this entry
             }
-            let displayText = entry.message || "";
+            let displayText = "";
             let cssClass = "history-item";
 
-            // Ensure entry properties are not null
-            const safeUserName = entry.userName || "Unknown User";
+            // Ensure entry properties are not null and avoid leaking raw UIDs
+            const rawName = (entry.userName || "").trim();
+            const uidPrefix = entry.userId ? String(entry.userId).slice(0, 5) : "guest";
+            const safeUserName =
+              rawName && !/^anonymous$/i.test(rawName) && !/^unknown/i.test(rawName)
+                ? rawName
+                : uidPrefix;
+            // Display name is always a 5-char prefix, preferring a non-generic name
+            const displayName =
+              rawName && !/^anonymous$/i.test(rawName) && !/^unknown/i.test(rawName)
+                ? rawName.slice(0, 5)
+                : uidPrefix;
             const safeItem = entry.item || "unknown item";
 
             switch (entry.type) {
               case "join":
                 cssClass += " history-join";
-                displayText =
-                  entry.message ||
-                  `${safeUserName.substring(0, 5)} joined the box`;
+                displayText = `${displayName} joined the box`;
                 break;
               case "leave":
                 cssClass += " history-leave";
-                displayText =
-                  entry.message ||
-                  `${safeUserName.substring(0, 5)} left the box`;
+                displayText = `${displayName} left the box`;
                 break;
               case "spin":
                 cssClass += " history-spin";

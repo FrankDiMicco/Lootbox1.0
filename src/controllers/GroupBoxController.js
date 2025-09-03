@@ -325,13 +325,9 @@ class GroupBoxController {
         // Record join event for creator
         await this.firebase.addSessionHistoryEvent(groupBoxId, {
           type: "join",
-          userId: currentUser.uid,
-          userName: currentUser.displayName || "Anonymous",
-          message: `${(currentUser.displayName || "Anonymous").substring(
-            0,
-            5
-          )} joined the box`,
-          timestamp: new Date().toISOString(),
+          userId: currentUser.uid, // ensure present
+          userName: currentUser.displayName || "", // let renderer mask if empty
+          // message ignored for join/leave in FirebaseService
         });
       }
 
@@ -417,12 +413,9 @@ class GroupBoxController {
         if (wasLeft) {
           await this.firebase.addSessionHistoryEvent(groupBoxId, {
             type: "join",
-            userId: currentUser.uid,
-            userName: currentUser.displayName || currentUser.uid,
-            message: `${
-              currentUser.displayName || currentUser.uid
-            } joined the box`,
-            timestamp: new Date().toISOString(),
+            userId: currentUser.uid, // ensure present
+            userName: currentUser.displayName || "", // let renderer mask if empty
+            // message ignored for join/leave in FirebaseService
           });
         }
 
@@ -505,10 +498,9 @@ class GroupBoxController {
       // Record join event
       await this.firebase.addSessionHistoryEvent(groupBoxId, {
         type: "join",
-        userId: currentUser.uid,
-        userName: currentUser.displayName || currentUser.uid,
-        message: `${currentUser.displayName || currentUser.uid} joined the box`,
-        timestamp: new Date().toISOString(),
+        userId: currentUser.uid, // ensure present
+        userName: currentUser.displayName || "", // let renderer mask if empty
+        // message ignored for join/leave in FirebaseService
       });
 
       return { success: true, alreadyJoined: false, groupBox };
