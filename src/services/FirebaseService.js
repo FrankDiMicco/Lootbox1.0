@@ -19,6 +19,7 @@ import {
   limit,
   serverTimestamp,
   arrayUnion,
+  increment,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
 class FirebaseService {
@@ -27,6 +28,9 @@ class FirebaseService {
     this.auth = null;
     this.db = null;
     this.isReady = false;
+    this.docCache = new Map(); // id -> { data, ts }
+    this.pendingLoads = new Map(); // id -> Promise
+    this.CACHE_TTL_MS = 10_000; // 10s TTL
   }
 
   async initialize() {
@@ -65,28 +69,13 @@ class FirebaseService {
         limit,
         serverTimestamp,
         arrayUnion,
+        increment,
       };
 
       // Sign in anonymously and perform smoke test
       const userCredential = await signInAnonymously(this.auth);
       const uid = userCredential.user.uid;
       console.log("Signed in anonymously with uid:", uid);
-
-      // Firestore smoke test - write data
-      const testData = {
-        hello: "world",
-        uid: uid,
-        timestamp: new Date(),
-      };
-
-      const docRef = await addDoc(collection(this.db, "tests"), testData);
-      console.log("Document written with ID:", docRef.id);
-
-      // Firestore smoke test - read data back
-      const querySnapshot = await getDocs(collection(this.db, "tests"));
-      querySnapshot.forEach((doc) => {
-        console.log("Read document:", doc.id, "=>", doc.data());
-      });
 
       this.isReady = true;
       console.log("Firebase initialized successfully");
@@ -189,46 +178,6 @@ class FirebaseService {
 
     // Verify what was saved by reading it back
     const savedDoc = await getDoc(docRef);
-    console.log("Verification - What was actually saved:", savedDoc.data());
-    console.log(
-      "Verification - Participants in saved doc:",
-      savedDoc.data().participants
-    );
-
-    return docRef.id;
-  }
-
-  async saveGroupBox(data) {
-    if (!this.isReady || !this.getCurrentUser()) {
-      throw new Error("Firebase not ready or user not authenticated");
-    }
-
-    console.log("FirebaseService.saveGroupBox - Received data:", data);
-    console.log(
-      "FirebaseService.saveGroupBox - Participants:",
-      data.participants
-    );
-
-    // Create a clean copy of the data to ensure it's saved properly
-    const groupBoxToSave = {
-      ...data,
-      participants: data.participants || [],
-      updatedAt: new Date().toISOString(),
-    };
-
-    console.log(
-      "FirebaseService.saveGroupBox - About to save:",
-      groupBoxToSave
-    );
-
-    const docRef = await addDoc(
-      collection(this.db, "group_boxes"),
-      groupBoxToSave
-    );
-    console.log("Created group box in Firebase with ID:", docRef.id);
-
-    // Verify what was saved by reading it back
-    const savedDoc = await getDoc(docRef);
     if (savedDoc.exists()) {
       console.log("Verification - What was actually saved:", savedDoc.data());
       console.log(
@@ -279,61 +228,26 @@ class FirebaseService {
     for (const docSnap of participatedSnapshot.docs) {
       const data = docSnap.data();
 
-      // SKIP if user hid or left this box
-      if (data.hiddenByUser === true || data.hasLeft === true) {
-        continue;
-      }
+      // Skip if user hid or left
+      if (data.hiddenByUser === true || data.hasLeft === true) continue;
 
-      // Check if the group box still exists
+      // Check existence once
       let groupBoxExists = true;
       try {
         const groupBoxRef = doc(this.db, "group_boxes", data.groupBoxId);
         const groupBoxSnap = await getDoc(groupBoxRef);
         groupBoxExists = groupBoxSnap.exists();
-      } catch (error) {
+      } catch {
         groupBoxExists = false;
       }
 
       if (groupBoxExists) {
-        // Add once (NO duplicates)
         participatedBoxes.push({
           id: docSnap.id,
           ...data,
           isGroupBox: true,
         });
       } else {
-        // Clean up dead participation record
-        console.log(
-          `Group box ${data.groupBoxId} no longer exists, cleaning up participation record`
-        );
-        toDelete.push(docSnap.id);
-      }
-
-      if (groupBoxExists) {
-        // Add the box regardless of hasLeft status - we want to keep boxes the user left
-        // so they can rejoin them later
-        participatedBoxes.push({
-          id: docSnap.id,
-          ...data,
-          isGroupBox: true,
-        });
-      } else {
-        // Group box was deleted, so clean up this participation record
-        console.log(
-          `Group box ${data.groupBoxId} no longer exists, cleaning up participation record`
-        );
-        toDelete.push(docSnap.id);
-      }
-
-      if (groupBoxExists) {
-        // Only add if the group box still exists
-        participatedBoxes.push({
-          id: docSnap.id,
-          ...data,
-          isGroupBox: true,
-        });
-      } else {
-        // Group box was deleted, so clean up this participation record
         console.log(
           `Group box ${data.groupBoxId} no longer exists, cleaning up participation record`
         );
@@ -675,13 +589,34 @@ class FirebaseService {
     }
   }
   async loadGroupBox(groupBoxId) {
-    if (!this.isReady) throw new Error("Firebase not ready");
+    if (!this.isReady) return null;
+
+    // 1) warm cache
+    const cached = this.docCache.get(groupBoxId);
+    if (cached && Date.now() - cached.ts < this.CACHE_TTL_MS)
+      return cached.data;
+
+    // 2) collapse concurrent requests
+    if (this.pendingLoads.has(groupBoxId))
+      return this.pendingLoads.get(groupBoxId);
+
     const { doc, getDoc } = window.firebaseFunctions;
     const ref = doc(this.db, "group_boxes", groupBoxId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return null; // return null if missing
-    const data = snap.data();
-    return { id: groupBoxId, groupBoxId, ...data }; // normalize ids
+
+    const p = (async () => {
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return null;
+      const data = { id: groupBoxId, groupBoxId, ...snap.data() };
+      this.docCache.set(groupBoxId, { data, ts: Date.now() });
+      return data;
+    })();
+
+    this.pendingLoads.set(groupBoxId, p);
+    try {
+      return await p;
+    } finally {
+      this.pendingLoads.delete(groupBoxId);
+    }
   }
 }
 
