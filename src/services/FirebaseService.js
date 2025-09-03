@@ -20,6 +20,7 @@ import {
   serverTimestamp,
   arrayUnion,
   increment,
+  onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
 class FirebaseService {
@@ -70,6 +71,7 @@ class FirebaseService {
         serverTimestamp,
         arrayUnion,
         increment,
+        onSnapshot
       };
 
       // Sign in anonymously and perform smoke test
@@ -617,6 +619,56 @@ class FirebaseService {
     } finally {
       this.pendingLoads.delete(groupBoxId);
     }
+  }
+
+  listenToGroupBoxDoc(groupBoxId, onData, onError) {
+    if (!this.isReady) return () => {};
+    const { doc, onSnapshot } = window.firebaseFunctions;
+    const ref = doc(this.db, "group_boxes", groupBoxId);
+    return onSnapshot(
+      ref,
+      (snap) =>
+        onData(
+          snap.exists()
+            ? { id: snap.id, groupBoxId: snap.id, ...snap.data() }
+            : null
+        ),
+      onError || ((e) => console.error("group box doc listener error:", e))
+    );
+  }
+
+  listenToSessionHistory(groupBoxId, onData, onError) {
+    if (!this.isReady) return () => {};
+    const { collection, query, orderBy, limit, onSnapshot } =
+      window.firebaseFunctions;
+    const q = query(
+      collection(this.db, "group_boxes", groupBoxId, "session_history"),
+      orderBy("timestamp", "desc"),
+      limit(50)
+    );
+    return onSnapshot(
+      q,
+      (qs) => {
+        const arr = [];
+        qs.forEach((d) => {
+          const x = d.data();
+          arr.push({
+            id: d.id,
+            type: x.type || "spin",
+            userId: x.userId || "unknown",
+            userName: x.userName || "Unknown User",
+            item: x.item || null,
+            message: x.message || "",
+            timestamp: x.timestamp?.toDate?.()
+              ? x.timestamp.toDate().toISOString()
+              : x.createdAt || new Date().toISOString(),
+            createdAt: x.createdAt || new Date().toISOString(),
+          });
+        });
+        onData(arr);
+      },
+      onError || ((e) => console.error("history listener error:", e))
+    );
   }
 }
 

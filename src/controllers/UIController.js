@@ -8,6 +8,9 @@ class UIController {
     this.groupBoxController = groupBoxController;
     this.state = appState;
     this.scrollPosition = 0;
+    // Realtime listeners (unsub functions)
+    this.state.groupBoxUnsub = null;
+    this.state.historyUnsub = null;
   }
 
   // Helper functions for scroll lock
@@ -294,6 +297,15 @@ class UIController {
   }
 
   showListView() {
+    // Unsubscribe any live listeners when leaving lootbox view
+    if (this.state.groupBoxUnsub) {
+      this.state.groupBoxUnsub();
+      this.state.groupBoxUnsub = null;
+    }
+    if (this.state.historyUnsub) {
+      this.state.historyUnsub();
+      this.state.historyUnsub = null;
+    }
     // Clean up any group box history refresh timer
     if (this.state.historyRefreshTimer) {
       clearInterval(this.state.historyRefreshTimer);
@@ -453,8 +465,8 @@ class UIController {
         this.state.communityHistory = [];
       }
 
-      // Set up periodic refresh of session history for group boxes to see other users' activity
-      this.setupGroupBoxHistoryRefresh(groupBoxId);
+      // Set up realtime listeners for group box doc + history
+      this.setupGroupBoxRealtime(groupBoxId);
 
       this.render();
     } else {
@@ -462,37 +474,59 @@ class UIController {
     }
   }
 
-  setupGroupBoxHistoryRefresh(groupBoxId) {
-    // Clear any existing refresh timer
-    if (this.state.historyRefreshTimer) {
-      clearInterval(this.state.historyRefreshTimer);
+  setupGroupBoxRealtime(groupBoxId) {
+    // clean previous
+    if (this.state.groupBoxUnsub) {
+      this.state.groupBoxUnsub();
+      this.state.groupBoxUnsub = null;
+    }
+    if (this.state.historyUnsub) {
+      this.state.historyUnsub();
+      this.state.historyUnsub = null;
     }
 
-    // Only set up refresh if Firebase is ready and we're viewing a group box
-    if (
-      this.lootboxController.firebase.isReady &&
-      this.state.currentLootbox?.isGroupBox
-    ) {
-      this.state.historyRefreshTimer = setInterval(async () => {
-        // Only refresh if we're still viewing the same group box
-        if (
-          this.state.currentLootbox?.isGroupBox &&
-          this.state.currentGroupBoxId === groupBoxId
-        ) {
-          try {
-            await this.refreshGroupBoxHistory(groupBoxId);
-          } catch (error) {
-            console.error("Error refreshing group box history:", error);
-          }
-        } else {
-          // Clear timer if we're no longer viewing this group box
-          if (this.state.historyRefreshTimer) {
-            clearInterval(this.state.historyRefreshTimer);
-            this.state.historyRefreshTimer = null;
-          }
+    // 1) Live doc: tries/expiry/spins
+    this.state.groupBoxUnsub = this.lootboxController.firebase.listenToGroupBoxDoc(
+      groupBoxId,
+      (docData) => {
+        if (!docData) {
+          this.showToast("This group box was deleted by the creator", "error");
+          this.showListView();
+          return;
         }
-      }, 15000); // Refresh every 15 seconds for better responsiveness
-    }
+        const currentUser = this.lootboxController.firebase.getCurrentUser();
+        const me = currentUser?.uid
+          ? docData.participants?.find((p) => p.userId === currentUser.uid)
+          : null;
+
+        if (this.state.currentLootbox?.isGroupBox) {
+          if (me?.userRemainingTries !== undefined) {
+            this.state.currentLootbox.userRemainingTries = me.userRemainingTries;
+            const t = document.getElementById("triesInfo");
+            if (t)
+              t.textContent =
+                me.userRemainingTries === "unlimited"
+                  ? "Tries remaining: unlimited"
+                  : `Tries remaining: ${me.userRemainingTries}`;
+          }
+          if (docData.expiresAt !== undefined)
+            this.state.currentLootbox.expiresAt = docData.expiresAt;
+          if (docData.totalSpins !== undefined)
+            this.state.currentLootbox.totalSpins = docData.totalSpins;
+          this.updateLootboxInteractivity();
+        }
+      }
+    );
+
+    // 2) Live history (latest 50)
+    this.state.historyUnsub = this.lootboxController.firebase.listenToSessionHistory(
+      groupBoxId,
+      (events) => {
+        this.state.groupBoxHistories.set(groupBoxId, events);
+        this.state.communityHistory = events;
+        this.updateSessionDisplay();
+      }
+    );
   }
 
   async refreshGroupBoxHistory(groupBoxId) {
