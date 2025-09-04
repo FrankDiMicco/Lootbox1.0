@@ -1185,7 +1185,7 @@ input[type="number"] {
 
 .back-btn {
     position: fixed;
-    top: 30px;
+    top: 70px;
     left: 30px;
     background: linear-gradient(145deg, #a855f7 0%, #8b5cf6 50%, #7c3aed 100%);
     border: 1px solid rgba(124, 58, 237, 0.8);
