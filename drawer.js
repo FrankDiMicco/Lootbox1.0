@@ -69,6 +69,22 @@ class NavigationDrawer {
             this.overlay.addEventListener('click', () => this.closeDrawer());
         }
         
+        // Sign-in buttons - close drawer when clicked
+        const signInButtons = document.querySelectorAll('[data-action="show-sign-in"]');
+        signInButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                this.closeDrawer();
+            });
+        });
+        
+        // Sign-out button - close drawer when clicked
+        const signOutButton = document.querySelector('[data-action="sign-out"]');
+        if (signOutButton) {
+            signOutButton.addEventListener('click', () => {
+                this.closeDrawer();
+            });
+        }
+        
         // ESC key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.isOpen) {

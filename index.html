@@ -157,10 +157,47 @@
                     <p class="footer-name">Guest User</p>
                     <p class="footer-status">Not signed in</p>
                 </div>
-                <button class="footer-action" aria-label="User settings">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-                    </svg>
+                <div class="footer-actions">
+                    <!-- Show sign-in button when not signed in -->
+                    <button class="footer-action sign-in-btn" data-action="show-sign-in" title="Sign In">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 7C14.65 7.05 14.4 7.29 14.4 7.65V16.35C14.4 16.71 14.65 16.95 15 17H17V15H17V9H21ZM9 8V7C9 6.45 8.55 6 8 6H5C4.45 6 4 6.45 4 7V8H9Z"/>
+                        </svg>
+                    </button>
+                    <!-- Show user menu when signed in -->
+                    <button class="footer-action user-menu-btn" data-action="show-user-menu" title="User menu" style="display: none;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- User menu dropdown (initially hidden) -->
+        <div class="user-menu hidden" id="userMenu">
+            <button class="user-menu-item" data-action="show-sign-in">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2Z"/>
+                </svg>
+                Sign In
+            </button>
+            <button class="user-menu-item" data-action="sign-out">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 7L15.59 8.41L18.17 11H8V13H18.17L15.59 15.59L17 17L22 12L17 7ZM4 5H12V3H4C2.9 3 2 3.9 2 5V19C2 20.1 2.9 21 4 21H12V19H4V5Z"/>
+                </svg>
+                Sign Out
+            </button>
+        </div>
+
+        <!-- Upgrade prompt for anonymous users -->
+        <div class="upgrade-prompt" id="upgradePrompt" style="display: none;">
+            <div class="upgrade-content">
+                <p style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">
+                    Sign in to save your lootboxes
+                </p>
+                <button class="upgrade-btn" data-action="show-sign-in">
+                    Sign In with Google
                 </button>
             </div>
         </div>

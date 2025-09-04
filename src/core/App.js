@@ -5,6 +5,7 @@ import LootboxController from "../controllers/LootboxController.js";
 import GroupBoxController from "../controllers/GroupBoxController.js";
 import UIController from "../controllers/UIController.js";
 import Router from "./Router.js";
+import AuthService from "../services/AuthService.js";
 
 class App {
   constructor() {
@@ -12,6 +13,7 @@ class App {
     this.services = {
       storage: null,
       firebase: null,
+      auth: null,
     };
 
     // Flags
@@ -62,6 +64,10 @@ class App {
       this.services.storage = new StorageService("lootbox_");
       this.services.firebase = new FirebaseService();
       await this.services.firebase.initialize();
+
+      // Initialize auth service AFTER Firebase
+      this.services.auth = new AuthService(this.services.firebase.app);
+      await this.services.auth.initializeAuth();
 
       // Initialize controllers with dependency injection
       this.controllers.lootbox = new LootboxController(
@@ -159,17 +165,21 @@ class App {
         e.preventDefault();
         const expiresSelect = document.getElementById("expiresIn");
         const customInputs = document.getElementById("customExpirationInputs");
-        
+
         // Select custom option and show inputs
         expiresSelect.value = "custom";
         customInputs.style.display = "block";
-        
+
         // Set default custom values to 1 day if all are 0
         const days = document.getElementById("customDays");
         const hours = document.getElementById("customHours");
         const minutes = document.getElementById("customMinutes");
         if (days && hours && minutes) {
-          if (days.value === "0" && hours.value === "0" && minutes.value === "0") {
+          if (
+            days.value === "0" &&
+            hours.value === "0" &&
+            minutes.value === "0"
+          ) {
             days.value = "1";
           }
         }
@@ -181,16 +191,20 @@ class App {
     if (expiresSelect) {
       expiresSelect.addEventListener("change", (e) => {
         const customInputs = document.getElementById("customExpirationInputs");
-        
+
         if (e.target.value === "custom") {
           customInputs.style.display = "block";
-          
+
           // Set default custom values to 1 day if all are 0
           const days = document.getElementById("customDays");
           const hours = document.getElementById("customHours");
           const minutes = document.getElementById("customMinutes");
           if (days && hours && minutes) {
-            if (days.value === "0" && hours.value === "0" && minutes.value === "0") {
+            if (
+              days.value === "0" &&
+              hours.value === "0" &&
+              minutes.value === "0"
+            ) {
               days.value = "1";
             }
           }
@@ -360,10 +374,12 @@ class App {
           document.getElementById("groupBoxModal").classList.add("show");
           document.getElementById("groupBoxName").value =
             this.state.sharingLootboxCopy?.name || "";
-          
+
           // Reset expiration to default 24 hours
           const expiresSelect = document.getElementById("expiresIn");
-          const customInputs = document.getElementById("customExpirationInputs");
+          const customInputs = document.getElementById(
+            "customExpirationInputs"
+          );
           if (expiresSelect) {
             expiresSelect.value = "24";
           }
@@ -526,6 +542,22 @@ class App {
               button.textContent = "▶";
             }
           }
+          break;
+
+        case "sign-in-google":
+          await this.handleGoogleSignIn();
+          break;
+
+        case "sign-in-apple":
+          await this.handleAppleSignIn();
+          break;
+
+        case "sign-out":
+          await this.handleSignOut();
+          break;
+
+        case "show-sign-in":
+          this.services.auth.showSignInModal();
           break;
 
         case "adjust-tries-display":
@@ -841,13 +873,13 @@ class App {
 
   async handleCreateGroupBox(formData) {
     const settings = this.controllers.ui.collectGroupBoxFormData(formData);
-    
+
     // Check for validation errors
     if (settings.error) {
       this.controllers.ui.showToast(settings.message, "error");
       return;
     }
-    
+
     const lootboxData = this.state.sharingLootboxCopy;
 
     if (!lootboxData) {
@@ -1024,6 +1056,71 @@ class App {
       }
     } catch (error) {
       console.error("Error marking group box as viewed:", error);
+    }
+  }
+
+  async handleGoogleSignIn() {
+    try {
+      let result;
+
+      if (this.services.auth.isAnonymousUser()) {
+        // Upgrade anonymous account
+        result = await this.services.auth.upgradeAnonymousAccount("google");
+      } else {
+        // Regular sign-in
+        result = await this.services.auth.signInWithGoogle();
+      }
+
+      if (result.success) {
+        this.controllers.ui.closeModal("signInModal");
+        this.controllers.ui.showToast(`Welcome ${result.user.displayName}!`);
+
+        // Refresh data to sync with new account
+        await this.loadInitialData();
+        this.controllers.ui.render();
+      } else {
+        this.controllers.ui.showToast(result.error, "error");
+      }
+    } catch (error) {
+      console.error("Google sign-in error:", error);
+      this.controllers.ui.showToast("Sign-in failed", "error");
+    }
+  }
+
+  async handleAppleSignIn() {
+    try {
+      let result;
+
+      if (this.services.auth.isAnonymousUser()) {
+        result = await this.services.auth.upgradeAnonymousAccount("apple");
+      } else {
+        result = await this.services.auth.signInWithApple();
+      }
+
+      if (result.success) {
+        this.controllers.ui.closeModal("signInModal");
+        this.controllers.ui.showToast(
+          `Welcome ${result.user.displayName || "User"}!`
+        );
+
+        await this.loadInitialData();
+        this.controllers.ui.render();
+      } else {
+        this.controllers.ui.showToast(result.error, "error");
+      }
+    } catch (error) {
+      console.error("Apple sign-in error:", error);
+      this.controllers.ui.showToast("Sign-in failed", "error");
+    }
+  }
+
+  async handleSignOut() {
+    const result = await this.services.auth.signOut();
+    if (result.success) {
+      this.controllers.ui.showToast("Signed out successfully");
+      // Clear local data and reload
+      await this.loadInitialData();
+      this.controllers.ui.render();
     }
   }
 
