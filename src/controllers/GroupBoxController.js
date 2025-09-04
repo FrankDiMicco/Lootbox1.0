@@ -453,29 +453,29 @@ class GroupBoxController {
       console.log("=== PARTICIPANT ADD DEBUG ===");
       console.log("Time:", new Date().toISOString());
       console.log("Added participant:", newParticipant);
-      
+
       // Start checking when the participant appears in Firebase
       let checkCount = 0;
       const maxChecks = 20; // Check for up to 20 seconds
       const checkInterval = setInterval(async () => {
         checkCount++;
-        
+
         // Force fresh read (bypass cache)
         if (this.firebase.docCache) {
           this.firebase.docCache.delete(groupBoxId);
         }
-        
+
         const checkData = await this.firebase.loadGroupBox(groupBoxId);
         const foundParticipant = checkData?.participants?.find(
-          p => p.userId === currentUser.uid
+          (p) => p.userId === currentUser.uid
         );
-        
+
         console.log(`Check #${checkCount}:`, {
           found: !!foundParticipant,
           totalParticipants: checkData?.participants?.length || 0,
-          participant: foundParticipant || "NOT FOUND"
+          participant: foundParticipant || "NOT FOUND",
         });
-        
+
         if (foundParticipant || checkCount >= maxChecks) {
           clearInterval(checkInterval);
           if (foundParticipant) {
@@ -813,9 +813,12 @@ class GroupBoxController {
           return { success: false, errors: ["Group box not found"] };
         }
 
-        console.log("Participants in group box:", freshData.participants?.length || 0);
+        console.log(
+          "Participants in group box:",
+          freshData.participants?.length || 0
+        );
         console.log("Looking for user:", currentUser.uid);
-        
+
         // List all participant IDs
         if (freshData.participants) {
           console.log("All participant IDs in group box:");
@@ -1021,426 +1024,6 @@ class GroupBoxController {
 
       if (error.code === "permission-denied") {
         return { success: false, errors: ["This group box has expired"] };
-      }
-
-      return { success: false, errors: [error.message] };
-    }
-  }
-
-  // Also in App.js - Replace the handleSpinLootbox method with this cleaner version:
-
-  // In GroupBoxController.js - Replace the Firebase update section in spinGroupBox:
-
-  async spinGroupBox(groupBoxId) {
-    try {
-      const currentUser = this.firebase.getCurrentUser();
-      if (!currentUser) {
-        return { success: false, errors: ["User not authenticated"] };
-      }
-
-      console.log("SPIN: Starting spin for user", currentUser.uid);
-
-      // FORCE RELOAD FROM FIREBASE TO GET LATEST TRIES
-      const freshData = await this.firebase.loadGroupBox(groupBoxId);
-      if (!freshData) {
-        return { success: false, errors: ["Group box not found in Firebase"] };
-      }
-
-      // Check if expired
-      if (freshData.expiresAt && new Date(freshData.expiresAt) <= new Date()) {
-        console.log("Group box has expired");
-        return {
-          success: false,
-          errors: ["This group box has expired - viewing only"],
-        };
-      }
-
-      console.log("SPIN: Fresh participants data:", freshData.participants);
-
-      // Find this user's fresh participant data
-      const freshParticipant = freshData.participants?.find(
-        (p) => p.userId === currentUser.uid
-      );
-
-      if (!freshParticipant) {
-        console.error("SPIN: User not found in participants!");
-        return {
-          success: false,
-          errors: ["You are not a participant in this group box"],
-        };
-      }
-
-      console.log(
-        "BEFORE SPIN - Participant tries:",
-        freshParticipant.userRemainingTries
-      );
-
-      // Get local group box
-      const groupBox = this.getGroupBox(groupBoxId);
-      if (!groupBox) {
-        return { success: false, errors: ["Group box not found locally"] };
-      }
-
-      console.log(
-        "LOCAL GroupBox before update - tries:",
-        groupBox.userRemainingTries
-      );
-      console.log(
-        "LOCAL GroupBox before update - opens:",
-        groupBox.userTotalOpens
-      );
-
-      // UPDATE LOCAL WITH FRESH DATA FROM FIREBASE
-      groupBox.userRemainingTries = freshParticipant.userRemainingTries;
-      groupBox.userTotalOpens = freshParticipant.userTotalOpens || 0;
-
-      console.log("SPIN: Updated local tries to:", groupBox.userRemainingTries);
-
-      // Debug: Check if canSpin method exists and works
-      console.log(
-        "Can spin check:",
-        groupBox.canSpin
-          ? groupBox.canSpin(currentUser.uid)
-          : "canSpin method missing"
-      );
-      console.log("GroupBox object keys:", Object.keys(groupBox));
-      console.log("GroupBox prototype:", Object.getPrototypeOf(groupBox));
-
-      // Check if can spin with FRESH data
-      if (
-        groupBox.userRemainingTries === 0 ||
-        groupBox.userRemainingTries === "0"
-      ) {
-        return {
-          success: false,
-          errors: [
-            `No remaining tries (you have ${groupBox.userRemainingTries})`,
-          ],
-        };
-      }
-
-      if (!groupBox.canSpin(currentUser.uid)) {
-        return {
-          success: false,
-          errors: ["Cannot spin: no remaining tries or group box expired"],
-        };
-      }
-
-      // Do the spin
-      console.log("About to call spinForUser...");
-      console.log("Does spinForUser exist?", typeof groupBox.spinForUser);
-
-      let result;
-      try {
-        result = groupBox.spinForUser(currentUser.uid);
-        console.log("spinForUser returned:", result);
-      } catch (spinError) {
-        console.error("spinForUser threw error:", spinError);
-        console.error("Error stack:", spinError.stack);
-
-        // Fallback: do the spin manually here
-        console.log("Attempting manual spin...");
-        const items = freshData.lootboxData?.items || [];
-        if (items.length === 0) {
-          return { success: false, errors: ["No items in group box"] };
-        }
-
-        const totalOdds = items.reduce(
-          (sum, item) => sum + (item.odds || 0),
-          0
-        );
-        let random = Math.random() * totalOdds;
-        let selectedItem = null;
-
-        for (const item of items) {
-          random -= item.odds || 0;
-          if (random <= 0) {
-            selectedItem = item;
-            break;
-          }
-        }
-
-        if (!selectedItem) selectedItem = items[0];
-
-        result = {
-          item: selectedItem.name,
-          timestamp: new Date().toISOString(),
-          userId: currentUser.uid,
-        };
-        console.log("Manual spin result:", result);
-      }
-
-      // Calculate new values
-      const newTries =
-        typeof freshParticipant.userRemainingTries === "number"
-          ? freshParticipant.userRemainingTries - 1
-          : parseInt(freshParticipant.userRemainingTries) - 1;
-
-      const newOpens = (freshParticipant.userTotalOpens || 0) + 1;
-
-      // Create updated participants array
-      const updatedParticipants = freshData.participants.map((p) => {
-        if (p.userId === currentUser.uid) {
-          return {
-            ...p,
-            userRemainingTries: newTries,
-            userTotalOpens: newOpens,
-            lastOpen: new Date().toISOString(),
-          };
-        }
-        return p;
-      });
-
-      console.log("AFTER SPIN - New tries:", newTries);
-      console.log(
-        "Updated participants array:",
-        JSON.stringify(updatedParticipants, null, 2)
-      );
-
-      // Log the exact update we're about to send
-      console.log("=== FIREBASE UPDATE ATTEMPT ===");
-      console.log("Document ID:", groupBoxId);
-      console.log("New tries value:", newTries, "Type:", typeof newTries);
-      console.log("New opens value:", newOpens, "Type:", typeof newOpens);
-
-      // Update Firebase with better error handling
-      const { updateDoc, doc, increment, getDoc } = window.firebaseFunctions;
-
-      try {
-        // First, let's verify the document exists and is writable
-        const groupBoxRef = doc(this.firebase.db, "group_boxes", groupBoxId);
-        const beforeUpdate = await getDoc(groupBoxRef);
-        console.log("Document exists before update?", beforeUpdate.exists());
-        console.log(
-          "Current participants in Firebase:",
-          beforeUpdate.data()?.participants
-        );
-
-        console.log("Attempting to update document:", groupBoxId);
-        console.log(
-          "Sending participants array with",
-          updatedParticipants.length,
-          "participants"
-        );
-        console.log(
-          "Your updated participant data:",
-          updatedParticipants.find((p) => p.userId === currentUser.uid)
-        );
-
-        // Try the update with just participants first
-        const updateData = {
-          participants: updatedParticipants,
-          updatedAt: new Date().toISOString(),
-        };
-
-        console.log("Sending update:", JSON.stringify(updateData, null, 2));
-
-        await updateDoc(groupBoxRef, updateData);
-
-        console.log("Participants update completed successfully");
-
-        // Clear the cache for this group box so verification gets fresh data
-        this.firebase.docCache.delete(groupBoxId);
-
-        // Immediately verify the update worked
-        const afterUpdate = await getDoc(groupBoxRef);
-        const updatedParticipant = afterUpdate
-          .data()
-          ?.participants?.find((p) => p.userId === currentUser.uid);
-        console.log(
-          "IMMEDIATE VERIFY - Tries after update:",
-          updatedParticipant?.userRemainingTries
-        );
-
-        if (updatedParticipant?.userRemainingTries !== newTries) {
-          console.error(
-            "UPDATE NOT SAVED! Expected",
-            newTries,
-            "but Firebase has",
-            updatedParticipant?.userRemainingTries
-          );
-        } else {
-          console.log("SUCCESS - Update was saved correctly!");
-        }
-
-        // Now try updating totalSpins separately
-        try {
-          await updateDoc(groupBoxRef, {
-            totalSpins: increment(1),
-          });
-          console.log("TotalSpins increment completed");
-        } catch (spinError) {
-          console.error("Failed to increment totalSpins:", spinError);
-        }
-      } catch (updateError) {
-        console.error("Firebase update FAILED:", updateError);
-        console.error("Error details:", {
-          code: updateError.code,
-          message: updateError.message,
-          details: updateError.details,
-        });
-
-        // Try an alternative update method
-        console.log("Trying alternative update method...");
-
-        try {
-          // Try using setDoc with merge instead
-          const { setDoc } = window.firebaseFunctions;
-          await setDoc(
-            doc(this.firebase.db, "group_boxes", groupBoxId),
-            {
-              participants: updatedParticipants,
-              updatedAt: new Date().toISOString(),
-            },
-            { merge: true }
-          );
-          console.log("Alternative update (setDoc) succeeded!");
-        } catch (altError) {
-          console.error("Alternative update also failed:", altError);
-          return { success: false, errors: ["Failed to update tries count"] };
-        }
-      }
-
-      // Add a delay before verification to ensure write is complete
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Verify the update worked
-      console.log("Verifying update...");
-      const verifyData = await this.firebase.loadGroupBox(groupBoxId);
-      const verifyParticipant = verifyData.participants?.find(
-        (p) => p.userId === currentUser.uid
-      );
-      console.log(
-        "VERIFY - Full participants array after update:",
-        verifyData.participants
-      );
-      console.log("VERIFY - Your participant data:", verifyParticipant);
-      console.log(
-        "VERIFY - Your tries after update:",
-        verifyParticipant?.userRemainingTries
-      );
-
-      if (verifyParticipant?.userRemainingTries !== newTries) {
-        console.error("WARNING: Firebase didn't save the new tries count!");
-        console.error(
-          "Expected:",
-          newTries,
-          "but got:",
-          verifyParticipant?.userRemainingTries
-        );
-
-        // One more attempt with a different approach
-        console.log("Attempting direct participant update...");
-
-        // Try updating just this participant
-        const updatedParticipantData = {
-          userId: currentUser.uid,
-          userName: freshParticipant.userName || "Anonymous",
-          userRemainingTries: newTries,
-          userTotalOpens: newOpens,
-          joinedAt: freshParticipant.joinedAt || new Date().toISOString(),
-          lastOpen: new Date().toISOString(),
-        };
-
-        // Build new array with just the updated participant
-        const finalParticipants = freshData.participants.map((p) =>
-          p.userId === currentUser.uid ? updatedParticipantData : p
-        );
-
-        console.log(
-          "Final attempt with clean participant object:",
-          updatedParticipantData
-        );
-
-        try {
-          await updateDoc(doc(this.firebase.db, "group_boxes", groupBoxId), {
-            participants: finalParticipants,
-          });
-
-          // Verify again
-          const finalVerify = await this.firebase.loadGroupBox(groupBoxId);
-          const finalParticipant = finalVerify.participants?.find(
-            (p) => p.userId === currentUser.uid
-          );
-          console.log(
-            "FINAL VERIFY - Tries:",
-            finalParticipant?.userRemainingTries
-          );
-
-          if (finalParticipant?.userRemainingTries === newTries) {
-            console.log("SUCCESS! Final attempt worked!");
-          }
-        } catch (finalError) {
-          console.error("Final attempt failed:", finalError);
-        }
-      }
-
-      // Update local stats
-      groupBox.userTotalOpens = newOpens;
-      groupBox.userRemainingTries = newTries;
-      groupBox.lastParticipated = new Date().toISOString();
-
-      const userName = currentUser.displayName || currentUser.uid;
-
-      // Record spin event
-      await this.firebase.addSessionHistoryEvent(groupBoxId, {
-        type: "spin",
-        userId: currentUser.uid,
-        userName: userName,
-        item: result.item,
-        message: `${userName.substring(0, 5)} opened the box and got "${
-          result.item
-        }"`,
-        timestamp: new Date().toISOString(),
-      });
-
-      // Update user's personal record
-      if (this.firebase.isReady && groupBox.id) {
-        try {
-          const { updateDoc } = window.firebaseFunctions;
-          await updateDoc(
-            doc(
-              this.firebase.db,
-              "users",
-              currentUser.uid,
-              "participated_group_boxes",
-              groupBox.id
-            ),
-            {
-              userTotalOpens: groupBox.userTotalOpens,
-              userRemainingTries: groupBox.userRemainingTries,
-              lastParticipated: groupBox.lastParticipated,
-            }
-          );
-        } catch (e) {
-          console.warn("Could not update personal record:", e);
-        }
-      }
-
-      await this.firebase.recordSpin(groupBoxId, result);
-
-      // Update the total spins counter in the main group box document
-      // try {
-      //   const { updateDoc, doc, increment } = window.firebaseFunctions;
-      //   await updateDoc(doc(this.firebase.db, "group_boxes", groupBoxId), {
-      //     totalSpins: increment(1),
-      //   });
-      // } catch (e) {
-      //   console.warn("Could not update spin counter:", e);
-      // }
-
-      await this.save();
-
-      return { success: true, result };
-    } catch (error) {
-      console.error("Error spinning group box:", error);
-
-      // Check for permission error (expired box)
-      if (error.code === "permission-denied") {
-        return {
-          success: false,
-          errors: ["This group box has expired and cannot be opened"],
-        };
       }
 
       return { success: false, errors: [error.message] };
