@@ -480,10 +480,17 @@ class FirebaseService {
 
     const { getDoc, updateDoc, doc } = window.firebaseFunctions;
 
+    console.log("=== UPDATE PARTICIPANT DEBUG ===");
+    console.log("Start time:", new Date().toISOString());
+    console.log("GroupBoxId:", groupBoxId);
+    console.log("Participant to add:", participantData);
+
     // Get current participants
     const groupBoxRef = doc(this.db, "group_boxes", groupBoxId);
     const groupBoxSnap = await getDoc(groupBoxRef);
     const groupBoxData = groupBoxSnap.data();
+
+    console.log("Current participants count:", groupBoxData.participants?.length || 0);
 
     const participants = groupBoxData.participants || [];
 
@@ -493,21 +500,43 @@ class FirebaseService {
     );
 
     if (existingIndex >= 0) {
-      // Update existing participant
+      console.log("Participant already exists at index:", existingIndex);
       participants[existingIndex] = {
         ...participants[existingIndex],
         ...participantData,
       };
     } else {
-      // Add new participant
+      console.log("Adding new participant");
       participants.push(participantData);
     }
 
+    console.log("New participants count:", participants.length);
+
     // Update the group box
-    await updateDoc(groupBoxRef, {
-      participants: participants,
-      uniqueUsers: participants.length,
-    });
+    try {
+      await updateDoc(groupBoxRef, {
+        participants: participants,
+        uniqueUsers: participants.length,
+      });
+      console.log("UPDATE SUCCESS at:", new Date().toISOString());
+      
+      // Immediately verify the write
+      const verifySnap = await getDoc(groupBoxRef);
+      const verifyData = verifySnap.data();
+      const verifyParticipant = verifyData.participants?.find(
+        p => p.userId === participantData.userId
+      );
+      
+      if (verifyParticipant) {
+        console.log("VERIFIED: Participant is in Firebase immediately after write");
+      } else {
+        console.log("WARNING: Participant NOT in Firebase immediately after write!");
+        console.log("Verify participants:", verifyData.participants);
+      }
+    } catch (error) {
+      console.log("UPDATE FAILED:", error);
+      throw error;
+    }
   }
 
   async getSessionHistory(groupBoxId) {

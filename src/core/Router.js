@@ -45,7 +45,6 @@ class Router {
       );
 
       if (result.success) {
-        // <-- THIS LINE WAS MISSING
         if (result.alreadyJoined) {
           this.app.controllers.ui.showToast("Welcome back to the group box!");
         } else {
@@ -54,8 +53,8 @@ class Router {
           );
         }
 
-        // Small delay to ensure Firebase write completes before opening
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // INCREASE the delay to ensure Firebase write is fully propagated
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Increased from 500ms to 2000ms
 
         // Now open the group box
         await this.app.controllers.ui.openGroupBox(groupBoxId);

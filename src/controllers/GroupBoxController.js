@@ -449,6 +449,44 @@ class GroupBoxController {
 
       await this.firebase.updateGroupBoxParticipant(groupBoxId, newParticipant);
 
+      // ADD THIS DEBUG CODE:
+      console.log("=== PARTICIPANT ADD DEBUG ===");
+      console.log("Time:", new Date().toISOString());
+      console.log("Added participant:", newParticipant);
+      
+      // Start checking when the participant appears in Firebase
+      let checkCount = 0;
+      const maxChecks = 20; // Check for up to 20 seconds
+      const checkInterval = setInterval(async () => {
+        checkCount++;
+        
+        // Force fresh read (bypass cache)
+        if (this.firebase.docCache) {
+          this.firebase.docCache.delete(groupBoxId);
+        }
+        
+        const checkData = await this.firebase.loadGroupBox(groupBoxId);
+        const foundParticipant = checkData?.participants?.find(
+          p => p.userId === currentUser.uid
+        );
+        
+        console.log(`Check #${checkCount}:`, {
+          found: !!foundParticipant,
+          totalParticipants: checkData?.participants?.length || 0,
+          participant: foundParticipant || "NOT FOUND"
+        });
+        
+        if (foundParticipant || checkCount >= maxChecks) {
+          clearInterval(checkInterval);
+          if (foundParticipant) {
+            console.log(`✓ Participant appeared after ${checkCount} checks`);
+          } else {
+            console.log(`✗ Participant NOT found after ${checkCount} checks`);
+          }
+          console.log("=== END DEBUG ===");
+        }
+      }, 1000); // Check every second
+
       // INCREMENT uniqueUsers for brand new participant
       await updateDoc(doc(this.firebase.db, "group_boxes", groupBoxId), {
         uniqueUsers: increment(1),
@@ -750,12 +788,73 @@ class GroupBoxController {
         return { success: false, errors: ["User not authenticated"] };
       }
 
-      console.log("SPIN: Starting spin for user", currentUser.uid);
+      console.log("=== SPIN DEBUG ===");
+      console.log("Spin attempt at:", new Date().toISOString());
+      console.log("User ID:", currentUser.uid);
+      console.log("GroupBox ID:", groupBoxId);
 
-      // STEP 1: Load fresh data from Firebase (single source of truth)
-      const freshData = await this.firebase.loadGroupBox(groupBoxId);
-      if (!freshData) {
-        return { success: false, errors: ["Group box not found"] };
+      // Add retry logic for loading fresh data
+      let freshData = null;
+      let participantFound = false;
+      let retries = 0;
+      const maxRetries = 3;
+
+      while (!participantFound && retries < maxRetries) {
+        // Force fresh read
+        if (this.firebase.docCache) {
+          console.log("Clearing cache for fresh read");
+          this.firebase.docCache.delete(groupBoxId);
+        }
+
+        freshData = await this.firebase.loadGroupBox(groupBoxId);
+
+        if (!freshData) {
+          console.log("ERROR: Group box not found");
+          return { success: false, errors: ["Group box not found"] };
+        }
+
+        console.log("Participants in group box:", freshData.participants?.length || 0);
+        console.log("Looking for user:", currentUser.uid);
+        
+        // List all participant IDs
+        if (freshData.participants) {
+          console.log("All participant IDs in group box:");
+          freshData.participants.forEach((p, index) => {
+            console.log(`  [${index}] ${p.userId} - ${p.userName}`);
+          });
+        } else {
+          console.log("No participants array found!");
+        }
+
+        // Check if participant exists in the data
+        const participant = freshData.participants?.find(
+          (p) => p.userId === currentUser.uid
+        );
+
+        if (participant) {
+          participantFound = true;
+          console.log("✓ Participant FOUND:", participant);
+        } else {
+          retries++;
+          if (retries < maxRetries) {
+            console.log(
+              `✗ Participant NOT found, retrying... (attempt ${
+                retries + 1
+              }/${maxRetries})`
+            );
+            // Wait a bit before retrying to allow Firebase to propagate
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          } else {
+            console.log("✗ Participant NOT found after all retries");
+          }
+        }
+      }
+
+      if (!participantFound) {
+        return {
+          success: false,
+          errors: ["You are not a participant in this group box"],
+        };
       }
 
       // Check expiration
