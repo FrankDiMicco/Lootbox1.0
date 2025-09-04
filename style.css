@@ -130,6 +130,20 @@ html:has(body.modal-open) {
     box-shadow: 0 3px 12px rgba(139, 92, 246, 0.4);
 }
 
+.create-filter-btn {
+    background: rgba(71, 85, 105, 0.6);
+    border-color: rgba(139, 92, 246, 0.4);
+    color: #d1d5db;
+    font-weight: 600;
+}
+
+.create-filter-btn:hover {
+    background: rgba(71, 85, 105, 0.8);
+    border-color: #8b5cf6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+}
+
 .lootbox-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -1337,8 +1351,8 @@ input[type="number"] {
     }
     
     .filter-btn {
-        padding: 6px 12px;
-        font-size: 13px;
+        padding: 6px 10px;
+        font-size: 12px;
         white-space: nowrap;
         flex-shrink: 0;
         min-width: fit-content;
@@ -1351,8 +1365,8 @@ input[type="number"] {
         }
         
         .filter-btn {
-            padding: 5px 10px;
-            font-size: 12px;
+            padding: 5px 8px;
+            font-size: 11px;
         }
     }
     
