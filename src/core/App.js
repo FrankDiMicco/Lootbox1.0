@@ -152,6 +152,66 @@ class App {
       }
     });
 
+    // Custom expiration link handler
+    const customLink = document.getElementById("customExpirationLink");
+    if (customLink) {
+      customLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        const expiresSelect = document.getElementById("expiresIn");
+        const customInputs = document.getElementById("customExpirationInputs");
+        const customOption = expiresSelect.querySelector('option[value="custom"]');
+        
+        // Toggle custom inputs visibility
+        if (customInputs.style.display === "block") {
+          // Hide custom inputs
+          customInputs.style.display = "none";
+          // Hide custom option and reset to 24 hours default
+          if (customOption) {
+            customOption.style.display = "none";
+          }
+          if (expiresSelect.value === "custom") {
+            expiresSelect.value = "24";
+          }
+        } else {
+          // Show custom inputs
+          customInputs.style.display = "block";
+          // Show and select custom option
+          if (customOption) {
+            customOption.style.display = "block";
+          }
+          expiresSelect.value = "custom";
+          
+          // Set default custom values to 1 day if all are 0
+          const days = document.getElementById("customDays");
+          const hours = document.getElementById("customHours");
+          const minutes = document.getElementById("customMinutes");
+          if (days && hours && minutes) {
+            if (days.value === "0" && hours.value === "0" && minutes.value === "0") {
+              days.value = "1";
+            }
+          }
+        }
+      });
+    }
+
+    // Expiration dropdown change handler
+    const expiresSelect = document.getElementById("expiresIn");
+    if (expiresSelect) {
+      expiresSelect.addEventListener("change", (e) => {
+        const customInputs = document.getElementById("customExpirationInputs");
+        const customOption = expiresSelect.querySelector('option[value="custom"]');
+        
+        if (e.target.value === "custom") {
+          customInputs.style.display = "block";
+          if (customOption) {
+            customOption.style.display = "block";
+          }
+        } else {
+          customInputs.style.display = "none";
+        }
+      });
+    }
+
     // Browser back/forward navigation
     window.addEventListener("popstate", () => {
       if (this.state.currentView !== "list") {
@@ -312,6 +372,27 @@ class App {
           document.getElementById("groupBoxModal").classList.add("show");
           document.getElementById("groupBoxName").value =
             this.state.sharingLootboxCopy?.name || "";
+          
+          // Reset expiration to default 24 hours
+          const expiresSelect = document.getElementById("expiresIn");
+          const customInputs = document.getElementById("customExpirationInputs");
+          const customOption = expiresSelect?.querySelector('option[value="custom"]');
+          if (expiresSelect) {
+            expiresSelect.value = "24";
+          }
+          if (customInputs) {
+            customInputs.style.display = "none";
+          }
+          if (customOption) {
+            customOption.style.display = "none";
+          }
+          // Reset custom input values
+          const customDays = document.getElementById("customDays");
+          const customHours = document.getElementById("customHours");
+          const customMinutes = document.getElementById("customMinutes");
+          if (customDays) customDays.value = "0";
+          if (customHours) customHours.value = "0";
+          if (customMinutes) customMinutes.value = "0";
           break;
 
         case "toggle-favorite":
@@ -776,6 +857,13 @@ class App {
 
   async handleCreateGroupBox(formData) {
     const settings = this.controllers.ui.collectGroupBoxFormData(formData);
+    
+    // Check for validation errors
+    if (settings.error) {
+      this.controllers.ui.showToast(settings.message, "error");
+      return;
+    }
+    
     const lootboxData = this.state.sharingLootboxCopy;
 
     if (!lootboxData) {

@@ -1610,7 +1610,29 @@ class UIController {
       parseInt(document.getElementById("triesPerPerson")?.value) || 3;
     const unlimitedGroupTries =
       document.getElementById("unlimitedGroupTries")?.checked || false;
-    const expiresIn = document.getElementById("expiresIn")?.value || "24";
+    let expiresIn = document.getElementById("expiresIn")?.value || "24";
+    
+    // Handle custom expiration
+    if (expiresIn === "custom") {
+      const days = parseInt(document.getElementById("customDays")?.value) || 0;
+      const hours = parseInt(document.getElementById("customHours")?.value) || 0;
+      const minutes = parseInt(document.getElementById("customMinutes")?.value) || 0;
+      
+      // Calculate total hours
+      const totalHours = (days * 24) + hours + (minutes / 60);
+      
+      // Validate that at least some time is set
+      if (totalHours <= 0) {
+        // Return null to indicate validation error
+        return {
+          error: true,
+          message: "Please set an expiration time (minimum 1 minute)"
+        };
+      }
+      
+      expiresIn = totalHours.toString();
+    }
+    
     const creatorParticipates =
       document.getElementById("creatorParticipates")?.checked || false;
     const hideContents =

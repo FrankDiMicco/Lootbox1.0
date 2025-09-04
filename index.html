@@ -412,13 +412,27 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Expires in</label>
+                    <label class="form-label">
+                        Expires in
+                        <a href="#" id="customExpirationLink" class="custom-link">Custom</a>
+                    </label>
                     <select id="expiresIn" class="form-input">
                         <option value="24">24 hours</option>
                         <option value="72">3 days</option>
                         <option value="168">1 week</option>
                         <option value="never">Never</option>
+                        <option value="custom" style="display: none;">Custom</option>
                     </select>
+                    <div id="customExpirationInputs" class="custom-expiration-inputs" style="display: none;">
+                        <div class="custom-time-row">
+                            <input type="number" id="customDays" class="custom-time-input" min="0" max="365" value="0">
+                            <label>days</label>
+                            <input type="number" id="customHours" class="custom-time-input" min="0" max="23" value="0">
+                            <label>hours</label>
+                            <input type="number" id="customMinutes" class="custom-time-input" min="0" max="59" value="0">
+                            <label>minutes</label>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">

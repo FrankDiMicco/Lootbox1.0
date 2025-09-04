@@ -248,9 +248,10 @@ class GroupBoxController {
 
       // Calculate expiration
       if (settings.expiresIn !== "never") {
-        const expirationHours = parseInt(settings.expiresIn);
+        const expirationHours = parseFloat(settings.expiresIn);
         const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + expirationHours);
+        // Use setTime to handle fractional hours properly
+        expiresAt.setTime(expiresAt.getTime() + (expirationHours * 60 * 60 * 1000));
         groupBoxData.expiresAt = expiresAt.toISOString();
       }
 
