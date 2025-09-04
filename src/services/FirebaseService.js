@@ -1,3 +1,5 @@
+// FirebaseService.js — FULL FILE (rewritten, keeps all features, adds atomic spin)
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import {
   getAuth,
@@ -21,6 +23,7 @@ import {
   arrayUnion,
   increment,
   onSnapshot,
+  runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
 class FirebaseService {
@@ -29,14 +32,14 @@ class FirebaseService {
     this.auth = null;
     this.db = null;
     this.isReady = false;
+
     this.docCache = new Map(); // id -> { data, ts }
     this.pendingLoads = new Map(); // id -> Promise
-    this.CACHE_TTL_MS = 10_000; // 10s TTL
+    this.CACHE_TTL_MS = 10_000;
   }
 
   async initialize() {
     try {
-      // Firebase configuration
       const firebaseConfig = {
         apiKey: "AIzaSyDX_7gT2YHIQnJ9Svna0-t-skJ7qNnygWM",
         authDomain: "lootbox-creator.firebaseapp.com",
@@ -47,12 +50,11 @@ class FirebaseService {
         measurementId: "G-2NQVKW2XP6",
       };
 
-      // Initialize Firebase
       this.app = initializeApp(firebaseConfig);
       this.auth = getAuth(this.app);
       this.db = getFirestore(this.app);
 
-      // Make Firebase instances globally available for backward compatibility
+      // expose for legacy callers
       window.firebaseAuth = this.auth;
       window.firebaseDb = this.db;
       window.firebaseFunctions = {
@@ -72,12 +74,12 @@ class FirebaseService {
         arrayUnion,
         increment,
         onSnapshot,
+        runTransaction,
       };
+      window.firebaseService = this;
 
-      // Sign in anonymously and perform smoke test
       const userCredential = await signInAnonymously(this.auth);
-      const uid = userCredential.user.uid;
-      console.log("Signed in anonymously with uid:", uid);
+      console.log("Signed in anonymously with uid:", userCredential.user.uid);
 
       this.isReady = true;
       console.log("Firebase initialized successfully");
@@ -91,26 +93,23 @@ class FirebaseService {
     return this.auth?.currentUser || null;
   }
 
+  // ===== Lootboxes (personal) =====
+
   async saveLootbox(lootbox) {
     if (!this.isReady || !this.getCurrentUser()) {
       throw new Error("Firebase not ready or user not authenticated");
     }
-
     const currentUser = this.getCurrentUser();
-    const lootboxWithUid = { ...lootbox, uid: currentUser.uid };
+    const payload = { ...lootbox, uid: currentUser.uid };
 
     if (lootbox.id) {
-      // Update existing
-      delete lootboxWithUid.id; // Remove id from data before saving
-      await setDoc(doc(this.db, "lootboxes", lootbox.id), lootboxWithUid);
-      console.log("Updated lootbox in Firebase:", lootbox.id);
-      return lootbox.id;
+      const id = lootbox.id;
+      delete payload.id;
+      await setDoc(doc(this.db, "lootboxes", id), payload);
+      console.log("Updated lootbox in Firebase:", id);
+      return id;
     } else {
-      // Create new
-      const docRef = await addDoc(
-        collection(this.db, "lootboxes"),
-        lootboxWithUid
-      );
+      const docRef = await addDoc(collection(this.db, "lootboxes"), payload);
       console.log("Created new lootbox in Firebase:", docRef.id);
       return docRef.id;
     }
@@ -120,57 +119,57 @@ class FirebaseService {
     if (!this.isReady || !this.getCurrentUser()) {
       throw new Error("Firebase not ready or user not authenticated");
     }
-
     const currentUser = this.getCurrentUser();
-    const q = query(
+    const qy = query(
       collection(this.db, "lootboxes"),
       where("uid", "==", currentUser.uid)
     );
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await getDocs(qy);
+
     const lootboxes = [];
-
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      // Remove the uid field for local use and add document id
+    querySnapshot.forEach((d) => {
+      const data = d.data();
       delete data.uid;
-      lootboxes.push({ id: doc.id, ...data });
+      lootboxes.push({ id: d.id, ...data });
     });
-
     console.log(`Loaded ${lootboxes.length} lootboxes from Firebase`);
     return lootboxes;
   }
 
   async deleteLootbox(id) {
-    if (!this.isReady) {
-      throw new Error("Firebase not ready");
-    }
-
+    if (!this.isReady) throw new Error("Firebase not ready");
     await deleteDoc(doc(this.db, "lootboxes", id));
     console.log("Deleted lootbox from Firebase:", id);
   }
+
+  async recordSpin(lootboxId, result) {
+    if (!this.isReady || !this.getCurrentUser()) {
+      throw new Error("Firebase not ready or user not authenticated");
+    }
+    const currentUser = this.getCurrentUser();
+    const spinData = {
+      userId: currentUser.uid,
+      lootboxId,
+      result,
+      timestamp: new Date(),
+    };
+    const docRef = await addDoc(collection(this.db, "spins"), spinData);
+    console.log("Recorded spin in Firebase:", docRef.id);
+    return docRef.id;
+  }
+
+  // ===== Group Boxes =====
 
   async saveGroupBox(data) {
     if (!this.isReady || !this.getCurrentUser()) {
       throw new Error("Firebase not ready or user not authenticated");
     }
 
-    console.log("FirebaseService.saveGroupBox - Received data:", data);
-    console.log(
-      "FirebaseService.saveGroupBox - Participants:",
-      data.participants
-    );
-
-    // Create a clean copy of the data to ensure it's saved properly
     const groupBoxToSave = {
       ...data,
       participants: data.participants || [],
       updatedAt: new Date().toISOString(),
     };
-
-    console.log(
-      "FirebaseService.saveGroupBox - About to save:",
-      groupBoxToSave
-    );
 
     const docRef = await addDoc(
       collection(this.db, "group_boxes"),
@@ -178,47 +177,94 @@ class FirebaseService {
     );
     console.log("Created group box in Firebase with ID:", docRef.id);
 
-    // Verify what was saved by reading it back
-    const savedDoc = await getDoc(docRef);
-    if (savedDoc.exists()) {
-      console.log("Verification - What was actually saved:", savedDoc.data());
+    // read-back verify (debug)
+    const saved = await getDoc(docRef);
+    if (saved.exists()) {
+      console.log("Verification - What was actually saved:", saved.data());
       console.log(
         "Verification - Participants in saved doc:",
-        savedDoc.data().participants
+        saved.data().participants
       );
     }
-
     return docRef.id;
   }
 
-  async recordSpin(lootboxId, result) {
-    if (!this.isReady || !this.getCurrentUser()) {
-      throw new Error("Firebase not ready or user not authenticated");
-    }
+  /**
+   * ATOMIC SPIN for GROUP BOXES (prevents double-counts).
+   * Decrements user_tries.remainingTries, increments totals, writes session_history (idempotent by key).
+   */
+  async finalizeSpinAtomic({
+    groupBoxId,
+    userId,
+    idempotencyKey,
+    spinPayload = {},
+  }) {
+    if (!this.isReady) throw new Error("Firebase not ready");
 
-    const currentUser = this.getCurrentUser();
-    const spinData = {
-      userId: currentUser.uid,
-      lootboxId: lootboxId,
-      result: result,
-      timestamp: new Date(),
-    };
+    const groupRef = doc(this.db, "group_boxes", groupBoxId);
+    const triesRef = doc(
+      this.db,
+      "group_boxes",
+      groupBoxId,
+      "user_tries",
+      userId
+    );
+    const histRef = doc(
+      this.db,
+      "group_boxes",
+      groupBoxId,
+      "session_history",
+      idempotencyKey
+    );
 
-    const docRef = await addDoc(collection(this.db, "spins"), spinData);
-    console.log("Recorded spin in Firebase:", docRef.id);
-    return docRef.id;
+    return runTransaction(this.db, async (tx) => {
+      const [g, t, h] = await Promise.all([
+        tx.get(groupRef),
+        tx.get(triesRef),
+        tx.get(histRef),
+      ]);
+
+      // idempotent
+      if (h.exists()) return { alreadyProcessed: true };
+
+      if (!t.exists()) throw new Error("not-participant");
+      const remaining = t.data().remainingTries ?? 0;
+      if (remaining <= 0) throw new Error("no-tries-left");
+
+      // user counters
+      tx.update(triesRef, {
+        remainingTries: increment(-1),
+        totalOpens: increment(1),
+        lastOpen: serverTimestamp(),
+      });
+
+      // group counters
+      tx.update(groupRef, {
+        totalOpens: increment(1),
+        totalSpins: increment(1),
+        updatedAt: serverTimestamp(),
+      });
+
+      // session_history entry (keyed)
+      tx.set(histRef, {
+        type: "spin",
+        userId,
+        createdAt: serverTimestamp(),
+        key: idempotencyKey,
+        ...spinPayload,
+      });
+
+      return { alreadyProcessed: false };
+    });
   }
 
   async loadParticipatedGroupBoxes() {
     if (!this.isReady || !this.getCurrentUser()) {
       throw new Error("Firebase not ready or user not authenticated");
     }
-
-    const { doc, getDoc, collection, getDocs, query, where } =
-      window.firebaseFunctions;
     const currentUser = this.getCurrentUser();
 
-    // --- Participated boxes (from user's subcollection) ---
+    // participated
     const participatedRef = collection(
       this.db,
       "users",
@@ -233,10 +279,9 @@ class FirebaseService {
     for (const docSnap of participatedSnapshot.docs) {
       const data = docSnap.data();
 
-      // Skip if user hid/left
       if (data.hiddenByUser === true || data.hasLeft === true) continue;
 
-      // Load canonical group box doc once
+      // canonical read
       let gbData = null;
       try {
         const gbRef = doc(this.db, "group_boxes", data.groupBoxId);
@@ -262,11 +307,9 @@ class FirebaseService {
         id: docSnap.id,
         ...data,
         isGroupBox: true,
-        // enrich for cards
         participants,
         activeUsers,
         totalSpins,
-        // legacy fallbacks if present
         totalOpens:
           typeof gbData?.totalOpens === "number"
             ? gbData.totalOpens
@@ -278,10 +321,10 @@ class FirebaseService {
       });
     }
 
-    // Clean up orphaned participation records
+    // clean orphans
     for (const deadId of toDelete) {
       try {
-        await window.firebaseFunctions.deleteDoc(
+        await deleteDoc(
           doc(
             this.db,
             "users",
@@ -296,7 +339,7 @@ class FirebaseService {
       }
     }
 
-    // --- Organizer-only boxes created by me (show in list with counters) ---
+    // organizer-only (mine)
     const organizerRef = collection(this.db, "group_boxes");
     const organizerQuery = query(
       organizerRef,
@@ -326,11 +369,9 @@ class FirebaseService {
         isOrganizerOnly: true,
         favorite: false,
         isGroupBox: true,
-        // enrich for cards
         participants,
         activeUsers,
         totalSpins,
-        // legacy fallbacks if present
         totalOpens: typeof gb?.totalOpens === "number" ? gb.totalOpens : 0,
         uniqueUsers: typeof gb?.uniqueUsers === "number" ? gb.uniqueUsers : 0,
         firstParticipated: gb.createdAt,
@@ -340,7 +381,7 @@ class FirebaseService {
       });
     });
 
-    // Merge, avoiding duplicates by groupBoxId
+    // merge
     const all = [...participatedBoxes];
     organizerBoxes.forEach((o) => {
       const i = all.findIndex((x) => x.groupBoxId === o.groupBoxId);
@@ -352,37 +393,31 @@ class FirebaseService {
     return all;
   }
 
-  async loadChestManifest() {
-    if (!this.isReady) {
-      throw new Error("Firebase not ready");
-    }
+  // ===== Chests =====
 
+  async loadChestManifest() {
+    if (!this.isReady) throw new Error("Firebase not ready");
     try {
-      // Query the 'chests' collection, ordered by sortOrder
       const chestsRef = collection(this.db, "chests");
-      const q = query(chestsRef, orderBy("sortOrder", "asc"));
-      const querySnapshot = await getDocs(q);
+      const qy = query(chestsRef, orderBy("sortOrder", "asc"));
+      const qs = await getDocs(qy);
 
       const chests = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        // Transform Firestore data to match existing structure and strip extra quotes
+      qs.forEach((d) => {
+        const data = d.data();
         chests.push({
-          file: data.fileName.replace(/"/g, ""),
-          name: data.name.replace(/"/g, ""),
-          description: data.description.replace(/"/g, ""),
+          file: (data.fileName || "").replace(/"/g, ""),
+          name: (data.name || "").replace(/"/g, ""),
+          description: (data.description || "").replace(/"/g, ""),
           tier: data.tier,
           sortOrder: data.sortOrder,
         });
       });
-
       console.log(`Loaded ${chests.length} chests from Firestore`);
       return chests;
     } catch (error) {
       console.error("Failed to load chests from Firestore:", error);
-
-      // Hardcoded fallback: use default chest list
-      console.log("Using hardcoded chest fallback");
+      // fallback
       return [
         {
           file: "chest.png",
@@ -427,32 +462,31 @@ class FirebaseService {
       ];
     }
   }
-  // Alias for UIController compatibility
   async loadAvailableChests() {
     return this.loadChestManifest();
   }
 
-  // Shared session history methods for group boxes
+  // ===== Session history (shared helpers) =====
+
   async addSessionHistoryEvent(groupBoxId, eventData) {
     if (!this.isReady) {
       console.warn("Firebase not ready, cannot add session history event");
       return false;
     }
-
     try {
-      const { collection, addDoc, serverTimestamp } = window.firebaseFunctions;
-
-      // Normalize event record (renderer handles masking)
       const uid = eventData.userId || this.getCurrentUser()?.uid;
-      if (!uid) throw new Error("No userId available for session history event");
+      if (!uid)
+        throw new Error("No userId available for session history event");
 
       const eventRecord = {
         type: eventData.type || "unknown",
         userId: uid,
-        userName:
-          (eventData.userName || this.getCurrentUser()?.displayName || "").trim(),
+        userName: (
+          eventData.userName ||
+          this.getCurrentUser()?.displayName ||
+          ""
+        ).trim(),
         item: eventData.item || null,
-        // Never persist message for join/leave; UI formats text
         message:
           eventData.type === "join" || eventData.type === "leave"
             ? ""
@@ -465,7 +499,6 @@ class FirebaseService {
         collection(this.db, "group_boxes", groupBoxId, "session_history"),
         eventRecord
       );
-
       console.log(
         `Session history event added: ${eventRecord.type} for ${eventRecord.userName}, doc ID: ${docRef.id}`
       );
@@ -475,68 +508,29 @@ class FirebaseService {
       return false;
     }
   }
+
   async updateGroupBoxParticipant(groupBoxId, participantData) {
     if (!this.isReady) throw new Error("Firebase not ready");
 
-    const { getDoc, updateDoc, doc } = window.firebaseFunctions;
-
-    console.log("=== UPDATE PARTICIPANT DEBUG ===");
-    console.log("Start time:", new Date().toISOString());
-    console.log("GroupBoxId:", groupBoxId);
-    console.log("Participant to add:", participantData);
-
-    // Get current participants
     const groupBoxRef = doc(this.db, "group_boxes", groupBoxId);
     const groupBoxSnap = await getDoc(groupBoxRef);
     const groupBoxData = groupBoxSnap.data();
 
-    console.log("Current participants count:", groupBoxData.participants?.length || 0);
-
     const participants = groupBoxData.participants || [];
-
-    // Check if participant already exists
-    const existingIndex = participants.findIndex(
+    const idx = participants.findIndex(
       (p) => p.userId === participantData.userId
     );
 
-    if (existingIndex >= 0) {
-      console.log("Participant already exists at index:", existingIndex);
-      participants[existingIndex] = {
-        ...participants[existingIndex],
-        ...participantData,
-      };
+    if (idx >= 0) {
+      participants[idx] = { ...participants[idx], ...participantData };
     } else {
-      console.log("Adding new participant");
       participants.push(participantData);
     }
 
-    console.log("New participants count:", participants.length);
-
-    // Update the group box
-    try {
-      await updateDoc(groupBoxRef, {
-        participants: participants,
-        uniqueUsers: participants.length,
-      });
-      console.log("UPDATE SUCCESS at:", new Date().toISOString());
-      
-      // Immediately verify the write
-      const verifySnap = await getDoc(groupBoxRef);
-      const verifyData = verifySnap.data();
-      const verifyParticipant = verifyData.participants?.find(
-        p => p.userId === participantData.userId
-      );
-      
-      if (verifyParticipant) {
-        console.log("VERIFIED: Participant is in Firebase immediately after write");
-      } else {
-        console.log("WARNING: Participant NOT in Firebase immediately after write!");
-        console.log("Verify participants:", verifyData.participants);
-      }
-    } catch (error) {
-      console.log("UPDATE FAILED:", error);
-      throw error;
-    }
+    await updateDoc(groupBoxRef, {
+      participants,
+      uniqueUsers: participants.length,
+    });
   }
 
   async getSessionHistory(groupBoxId) {
@@ -544,38 +538,31 @@ class FirebaseService {
       console.warn("Firebase not ready, cannot load session history");
       return [];
     }
-
     try {
-      const { collection, query, orderBy, getDocs, limit } =
-        window.firebaseFunctions;
       const historyRef = collection(
         this.db,
         "group_boxes",
         groupBoxId,
         "session_history"
       );
-      // Get last 100 events, ordered by timestamp descending
-      const q = query(historyRef, orderBy("timestamp", "desc"), limit(50));
-      const querySnapshot = await getDocs(q);
+      const qy = query(historyRef, orderBy("timestamp", "desc"), limit(50));
+      const qs = await getDocs(qy);
 
       const history = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        // Ensure we have all required fields
-        const event = {
-          id: doc.id,
+      qs.forEach((d) => {
+        const data = d.data();
+        history.push({
+          id: d.id,
           type: data.type || "spin",
           userId: data.userId || "unknown",
           userName: data.userName || "Unknown User",
           item: data.item || null,
           message: data.message || "",
-          // Handle both Firestore timestamps and ISO strings
           timestamp: data.timestamp?.toDate?.()
             ? data.timestamp.toDate().toISOString()
             : data.createdAt || new Date().toISOString(),
           createdAt: data.createdAt || new Date().toISOString(),
-        };
-        history.push(event);
+        });
       });
 
       console.log(
@@ -587,7 +574,7 @@ class FirebaseService {
       return [];
     }
   }
-  // Record a "join" event in a group box
+
   static async logGroupJoin(db, groupBoxId, uid, userName) {
     const colRef = collection(
       doc(db, "group_boxes", groupBoxId),
@@ -600,14 +587,12 @@ class FirebaseService {
       timestamp: serverTimestamp(),
     });
   }
-  // Hide a participated group box for the current user and log a "leave"
+
   async hideParticipatedGroupBox(groupBoxId) {
     if (!this.isReady || !this.getCurrentUser()) return false;
-
     try {
       const user = this.getCurrentUser();
 
-      // 1) mark it hidden (and mark as left)
       await setDoc(
         doc(this.db, "users", user.uid, "participated_group_boxes", groupBoxId),
         {
@@ -619,7 +604,6 @@ class FirebaseService {
         { merge: true }
       );
 
-      // 2) log a "leave" event in session_history (best effort)
       try {
         await addDoc(
           collection(this.db, "group_boxes", groupBoxId, "session_history"),
@@ -641,19 +625,19 @@ class FirebaseService {
       return false;
     }
   }
+
+  // ===== Doc utilities =====
+
   async loadGroupBox(groupBoxId) {
     if (!this.isReady) return null;
 
-    // 1) warm cache
     const cached = this.docCache.get(groupBoxId);
     if (cached && Date.now() - cached.ts < this.CACHE_TTL_MS)
       return cached.data;
 
-    // 2) collapse concurrent requests
     if (this.pendingLoads.has(groupBoxId))
       return this.pendingLoads.get(groupBoxId);
 
-    const { doc, getDoc } = window.firebaseFunctions;
     const ref = doc(this.db, "group_boxes", groupBoxId);
 
     const p = (async () => {
@@ -674,7 +658,6 @@ class FirebaseService {
 
   listenToGroupBoxDoc(groupBoxId, onData, onError) {
     if (!this.isReady) return () => {};
-    const { doc, onSnapshot } = window.firebaseFunctions;
     const ref = doc(this.db, "group_boxes", groupBoxId);
     return onSnapshot(
       ref,
@@ -690,15 +673,13 @@ class FirebaseService {
 
   listenToSessionHistory(groupBoxId, onData, onError) {
     if (!this.isReady) return () => {};
-    const { collection, query, orderBy, limit, onSnapshot } =
-      window.firebaseFunctions;
-    const q = query(
+    const qy = query(
       collection(this.db, "group_boxes", groupBoxId, "session_history"),
       orderBy("timestamp", "desc"),
       limit(50)
     );
     return onSnapshot(
-      q,
+      qy,
       (qs) => {
         const arr = [];
         qs.forEach((d) => {
