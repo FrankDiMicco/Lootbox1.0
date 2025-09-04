@@ -152,43 +152,25 @@ class App {
       }
     });
 
-    // Custom expiration link handler
+    // Custom expiration link handler - quick shortcut to select custom
     const customLink = document.getElementById("customExpirationLink");
     if (customLink) {
       customLink.addEventListener("click", (e) => {
         e.preventDefault();
         const expiresSelect = document.getElementById("expiresIn");
         const customInputs = document.getElementById("customExpirationInputs");
-        const customOption = expiresSelect.querySelector('option[value="custom"]');
         
-        // Toggle custom inputs visibility
-        if (customInputs.style.display === "block") {
-          // Hide custom inputs
-          customInputs.style.display = "none";
-          // Hide custom option and reset to 24 hours default
-          if (customOption) {
-            customOption.style.display = "none";
-          }
-          if (expiresSelect.value === "custom") {
-            expiresSelect.value = "24";
-          }
-        } else {
-          // Show custom inputs
-          customInputs.style.display = "block";
-          // Show and select custom option
-          if (customOption) {
-            customOption.style.display = "block";
-          }
-          expiresSelect.value = "custom";
-          
-          // Set default custom values to 1 day if all are 0
-          const days = document.getElementById("customDays");
-          const hours = document.getElementById("customHours");
-          const minutes = document.getElementById("customMinutes");
-          if (days && hours && minutes) {
-            if (days.value === "0" && hours.value === "0" && minutes.value === "0") {
-              days.value = "1";
-            }
+        // Select custom option and show inputs
+        expiresSelect.value = "custom";
+        customInputs.style.display = "block";
+        
+        // Set default custom values to 1 day if all are 0
+        const days = document.getElementById("customDays");
+        const hours = document.getElementById("customHours");
+        const minutes = document.getElementById("customMinutes");
+        if (days && hours && minutes) {
+          if (days.value === "0" && hours.value === "0" && minutes.value === "0") {
+            days.value = "1";
           }
         }
       });
@@ -199,12 +181,18 @@ class App {
     if (expiresSelect) {
       expiresSelect.addEventListener("change", (e) => {
         const customInputs = document.getElementById("customExpirationInputs");
-        const customOption = expiresSelect.querySelector('option[value="custom"]');
         
         if (e.target.value === "custom") {
           customInputs.style.display = "block";
-          if (customOption) {
-            customOption.style.display = "block";
+          
+          // Set default custom values to 1 day if all are 0
+          const days = document.getElementById("customDays");
+          const hours = document.getElementById("customHours");
+          const minutes = document.getElementById("customMinutes");
+          if (days && hours && minutes) {
+            if (days.value === "0" && hours.value === "0" && minutes.value === "0") {
+              days.value = "1";
+            }
           }
         } else {
           customInputs.style.display = "none";
@@ -376,15 +364,11 @@ class App {
           // Reset expiration to default 24 hours
           const expiresSelect = document.getElementById("expiresIn");
           const customInputs = document.getElementById("customExpirationInputs");
-          const customOption = expiresSelect?.querySelector('option[value="custom"]');
           if (expiresSelect) {
             expiresSelect.value = "24";
           }
           if (customInputs) {
             customInputs.style.display = "none";
-          }
-          if (customOption) {
-            customOption.style.display = "none";
           }
           // Reset custom input values
           const customDays = document.getElementById("customDays");
