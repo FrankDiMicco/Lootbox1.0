@@ -285,9 +285,7 @@ class App {
               this.controllers.ui.showToast(
                 `"${result.groupBoxName}" deleted for everyone`
               );
-              document
-                .getElementById("creatorDeleteModal")
-                .classList.remove("show");
+              this.controllers.ui.closeModal("creatorDeleteModal");
               this.controllers.ui.render();
             }
             this.state.pendingDeleteGroupBoxId = undefined;
@@ -302,9 +300,7 @@ class App {
             );
             if (result.success) {
               this.controllers.ui.showToast(`Left "${result.groupBoxName}"`);
-              document
-                .getElementById("creatorDeleteModal")
-                .classList.remove("show");
+              this.controllers.ui.closeModal("creatorDeleteModal");
               this.controllers.ui.render();
             }
             this.state.pendingDeleteGroupBoxId = undefined;
@@ -824,6 +820,7 @@ class App {
       nameEl.textContent = lootbox.name;
       deleteBtn.setAttribute("data-type", "lootbox");
       modal.classList.add("show");
+      this.controllers.ui.lockBodyScroll();
     }
   }
 
@@ -841,6 +838,7 @@ class App {
       if (modal && nameEl) {
         nameEl.textContent = groupBox.groupBoxName;
         modal.classList.add("show");
+        this.controllers.ui.lockBodyScroll();
       }
     } else {
       // For creators who participated OR regular participants,
@@ -852,6 +850,7 @@ class App {
         nameEl.textContent = groupBox.groupBoxName;
         deleteBtn.setAttribute("data-type", "groupbox");
         modal.classList.add("show");
+        this.controllers.ui.lockBodyScroll();
       }
     }
   }
