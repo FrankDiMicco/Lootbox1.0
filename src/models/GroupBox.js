@@ -63,6 +63,8 @@ class GroupBox extends Lootbox {
     }
   }
 
+  // In models/GroupBox.js - Replace ONLY your canSpin method with this:
+
   canSpin(userId) {
     // Check if group box has items
     const items = this.items || this.lootboxData?.items || [];
@@ -85,7 +87,16 @@ class GroupBox extends Lootbox {
       return true;
     }
 
-    return this.userRemainingTries > 0;
+    // FIX: Ensure tries is treated as a number and check for > 0 (not >= 0)
+    const tries =
+      typeof this.userRemainingTries === "number"
+        ? this.userRemainingTries
+        : parseInt(this.userRemainingTries);
+
+    console.log("canSpin check - tries:", tries, "type:", typeof tries);
+
+    // Only allow spin if tries is greater than 0
+    return tries > 0;
   }
 
   spinForUser(userId) {

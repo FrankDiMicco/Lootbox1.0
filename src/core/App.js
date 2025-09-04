@@ -505,95 +505,93 @@ class App {
     }
   }
 
+  // In App.js - Replace your handleSpinLootbox method with this:
+
   async handleSpinLootbox() {
-    // Check if we're already spinning - this prevents rapid clicks
+    // Prevent double-clicks with a proper flag
     if (this.state.isSpinning) {
-      console.log("Already spinning, please wait...");
+      console.log("Already spinning, ignoring click");
       return;
     }
 
-    if (this.state.isOnCooldown) return;
     const lootbox = this.state.currentLootbox;
-    if (!lootbox) return;
+    if (!lootbox || this.state.isOnCooldown) return;
 
-    // Set the spinning flag to true
+    // Set spinning flag immediately
     this.state.isSpinning = true;
 
+    // Disable the button visually
+    const buttonEl = document.getElementById("openButton");
+    if (buttonEl) {
+      buttonEl.disabled = true;
+      buttonEl.style.cursor = "wait";
+    }
+
     try {
-      // Check if this is a group box spin
+      let result;
+
       if (lootbox.isGroupBox) {
+        // For organizer-only mode
         if (this.state.isOrganizerReadonly) {
           this.controllers.ui.showToast("Organizer view - opens disabled");
-          this.state.isSpinning = false;
           return;
         }
 
-        console.log(
-          "SPIN CLICKED - Current tries before refresh:",
-          lootbox.userRemainingTries
-        );
-
-        // Check if group box still exists AND refresh tries in one call
-        try {
-          const freshData = await this.services.firebase.loadGroupBox(
-            lootbox.groupBoxId
-          );
-          console.log("Fresh data loaded:", freshData);
-
-          // If we got here, the group box exists
-          const currentUser = this.services.firebase.getCurrentUser();
-          const freshParticipant = freshData?.participants?.find(
-            (p) => p.userId === currentUser?.uid
-          );
-
-          console.log("Fresh participant data:", freshParticipant);
-          console.log(
-            "Fresh tries from Firebase:",
-            freshParticipant?.userRemainingTries
-          );
-
-          if (freshParticipant) {
-            // Update local state with fresh tries
-            lootbox.userRemainingTries = freshParticipant.userRemainingTries;
-            this.state.currentLootbox.userRemainingTries =
-              freshParticipant.userRemainingTries;
-
-            // Update UI display
-            const triesEl = document.getElementById("triesInfo");
-            console.log("Tries element found:", triesEl);
-            console.log("Updating UI to:", freshParticipant.userRemainingTries);
-
-            if (triesEl) {
-              triesEl.textContent = `Tries remaining: ${freshParticipant.userRemainingTries}`;
-              console.log("UI updated, element now says:", triesEl.textContent);
-            }
-
-            this.controllers.ui.updateLootboxInteractivity();
-          }
-        } catch (error) {
-          console.error("Error loading fresh data:", error);
-          // Group box doesn't exist or other error
-          this.controllers.ui.showToast(
-            "This group box has been deleted",
-            "error"
-          );
-          this.controllers.ui.showListView();
-          this.state.isSpinning = false;
-          return;
+        // CRITICAL FIX: Temporarily disconnect realtime listeners during spin
+        console.log("Disconnecting realtime listeners during spin...");
+        if (this.state.groupBoxUnsub) {
+          this.state.groupBoxUnsub();
+          this.state.groupBoxUnsub = null;
+        }
+        if (this.state.historyUnsub) {
+          this.state.historyUnsub();
+          this.state.historyUnsub = null;
         }
 
-        // Now continue with the spin
-        const result = await this.controllers.groupBox.spinGroupBox(
+        // Spin the group box
+        result = await this.controllers.groupBox.spinGroupBox(
           lootbox.groupBoxId
         );
+
         if (result.success) {
+          // Update the local state with the new tries count
+          this.state.currentLootbox.userRemainingTries =
+            this.controllers.groupBox.getGroupBox(lootbox.groupBoxId)
+              ?.userRemainingTries || 0;
+
+          // Update UI immediately with the new value
+          const triesEl = document.getElementById("triesInfo");
+          if (triesEl) {
+            triesEl.textContent = `Tries remaining: ${this.state.currentLootbox.userRemainingTries}`;
+          }
+
+          // Handle the result display
           this.handleSpinResult(result.result);
+
+          // Wait a bit for Firebase to fully propagate the update
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+
+          // Reconnect realtime listeners AFTER the update is complete
+          console.log("Reconnecting realtime listeners...");
+          this.controllers.ui.setupGroupBoxRealtime(lootbox.groupBoxId);
         } else {
-          this.controllers.ui.showToast(result.errors[0], "error");
+          // Handle errors
+          if (result.errors[0].includes("expired")) {
+            this.controllers.ui.showToast(
+              "This group box has expired",
+              "error"
+            );
+            this.controllers.ui.showListView();
+          } else {
+            this.controllers.ui.showToast(result.errors[0], "error");
+          }
+
+          // Reconnect listeners even on error
+          this.controllers.ui.setupGroupBoxRealtime(lootbox.groupBoxId);
         }
       } else {
         // Regular lootbox spin (unchanged)
-        const result = await this.controllers.lootbox.spinLootbox(
+        result = await this.controllers.lootbox.spinLootbox(
           this.state.currentLootboxIndex
         );
         if (result.success) {
@@ -603,12 +601,112 @@ class App {
         }
       }
     } finally {
-      // Always reset the spinning flag, even if there was an error
-      // But wait a tiny bit to prevent double-clicks
+      // Always reset the spinning flag after a delay
       setTimeout(() => {
         this.state.isSpinning = false;
+
+        // Re-enable the button
+        const buttonEl = document.getElementById("openButton");
+        if (buttonEl) {
+          buttonEl.disabled = false;
+          buttonEl.style.cursor = "pointer";
+        }
+
+        // Update interactivity
+        this.controllers.ui.updateLootboxInteractivity();
       }, 500);
     }
+  }
+
+  // ALSO in UIController.js - Make setupGroupBoxRealtime accessible:
+  // Add this check to prevent duplicate listeners
+
+  setupGroupBoxRealtime(groupBoxId) {
+    // Clean up any existing listeners first
+    if (this.state.groupBoxUnsub) {
+      console.log("Cleaning up existing group box listener");
+      this.state.groupBoxUnsub();
+      this.state.groupBoxUnsub = null;
+    }
+    if (this.state.historyUnsub) {
+      console.log("Cleaning up existing history listener");
+      this.state.historyUnsub();
+      this.state.historyUnsub = null;
+    }
+
+    console.log("Setting up realtime listeners for group box:", groupBoxId);
+
+    // 1) Live doc: tries/expiry/spins
+    this.state.groupBoxUnsub =
+      this.lootboxController.firebase.listenToGroupBoxDoc(
+        groupBoxId,
+        (docData) => {
+          if (!docData) {
+            this.showToast(
+              "This group box was deleted by the creator",
+              "error"
+            );
+            this.showListView();
+            return;
+          }
+
+          // IMPORTANT: Don't update if we're in the middle of spinning
+          if (this.state.isSpinning) {
+            console.log("Ignoring realtime update during spin");
+            return;
+          }
+
+          const currentUser = this.lootboxController.firebase.getCurrentUser();
+          const me = currentUser?.uid
+            ? docData.participants?.find((p) => p.userId === currentUser.uid)
+            : null;
+
+          if (this.state.currentLootbox?.isGroupBox) {
+            if (me?.userRemainingTries !== undefined) {
+              console.log("Realtime update - tries:", me.userRemainingTries);
+              this.state.currentLootbox.userRemainingTries =
+                me.userRemainingTries;
+              const t = document.getElementById("triesInfo");
+              if (t)
+                t.textContent =
+                  me.userRemainingTries === "unlimited"
+                    ? "Tries remaining: unlimited"
+                    : `Tries remaining: ${me.userRemainingTries}`;
+            }
+            if (docData.expiresAt !== undefined)
+              this.state.currentLootbox.expiresAt = docData.expiresAt;
+            if (docData.totalSpins !== undefined)
+              this.state.currentLootbox.totalSpins = docData.totalSpins;
+            this.updateLootboxInteractivity();
+          }
+        }
+      );
+
+    // 2) Live history (latest 50)
+    this.state.historyUnsub =
+      this.lootboxController.firebase.listenToSessionHistory(
+        groupBoxId,
+        (events) => {
+          // Don't update history during spin either
+          if (this.state.isSpinning) {
+            console.log("Ignoring history update during spin");
+            return;
+          }
+
+          this.state.groupBoxHistories.set(groupBoxId, events);
+          this.state.communityHistory = events;
+
+          if (this.state.currentLootbox?.isGroupBox) {
+            const spins = events.filter((e) => e.type === "spin").length;
+            const shown = Number(this.state.currentLootbox.totalSpins ?? 0);
+            if (spins > shown) {
+              this.state.currentLootbox.totalSpins = spins;
+            }
+          }
+
+          this.updateSessionDisplay();
+        }
+      );
   }
 
   handleSpinResult(result) {
