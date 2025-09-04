@@ -342,6 +342,10 @@ class GroupBoxController {
 
   // Replace the joinGroupBox method in GroupBoxController.js with this fixed version:
 
+  // Simplified fix for uniqueUsers counter - only handling real scenarios
+
+  // In GroupBoxController.js - Fix joinGroupBox to properly handle uniqueUsers
+
   async joinGroupBox(groupBoxId) {
     try {
       const currentUser = this.firebase.getCurrentUser();
@@ -349,12 +353,17 @@ class GroupBoxController {
         return { success: false, errors: ["User not authenticated"] };
       }
 
-      // First, check if we already have this group box in memory
-      let existing = this.groupBoxes.find((gb) => gb.groupBoxId === groupBoxId);
-
       // Check Firebase for existing participation record
-      const { collection, query, where, getDocs, updateDoc, doc, setDoc } =
-        window.firebaseFunctions;
+      const {
+        collection,
+        query,
+        where,
+        getDocs,
+        updateDoc,
+        doc,
+        setDoc,
+        increment,
+      } = window.firebaseFunctions;
       const participationQuery = query(
         collection(
           this.firebase.db,
@@ -367,15 +376,20 @@ class GroupBoxController {
       const participationSnapshot = await getDocs(participationQuery);
 
       if (!participationSnapshot.empty) {
-        // User has participated before - update existing record
+        // User has participated before - they're REJOINING after leaving
         const existingDoc = participationSnapshot.docs[0];
         const existingData = existingDoc.data();
-        const wasLeft = existingData.hasLeft === true;
 
         // Update the participation record to mark as active
         await updateDoc(existingDoc.ref, {
           hasLeft: false,
           rejoinedAt: new Date().toISOString(),
+        });
+
+        // INCREMENT uniqueUsers since they're rejoining (they were decremented when they left)
+        await updateDoc(doc(this.firebase.db, "group_boxes", groupBoxId), {
+          uniqueUsers: increment(1),
+          updatedAt: new Date().toISOString(),
         });
 
         // Load fresh group box data
@@ -393,39 +407,24 @@ class GroupBoxController {
           hasLeft: false,
           isGroupBox: true,
           userTotalOpens: existingData.userTotalOpens || 0,
-          viewed: existing ? existing.viewed : false, // Preserve viewed status
-          lastInteracted: existing ? existing.lastInteracted : null, // Preserve last interaction
           userRemainingTries: existingData.userRemainingTries,
         });
 
-        if (existing) {
-          // Update existing in array
-          const index = this.groupBoxes.findIndex(
-            (gb) => gb.groupBoxId === groupBoxId
-          );
-          if (index >= 0) {
-            this.groupBoxes[index] = groupBox;
-          }
-        } else {
-          // Add to array
-          this.groupBoxes.push(groupBox);
-        }
+        // Add to local array (it won't be there since they left)
+        this.groupBoxes.push(groupBox);
 
         // Record rejoin event
-        if (wasLeft) {
-          await this.firebase.addSessionHistoryEvent(groupBoxId, {
-            type: "join",
-            userId: currentUser.uid, // ensure present
-            userName: currentUser.displayName || "", // let renderer mask if empty
-            // message ignored for join/leave in FirebaseService
-          });
-        }
+        await this.firebase.addSessionHistoryEvent(groupBoxId, {
+          type: "join",
+          userId: currentUser.uid,
+          userName: currentUser.displayName || "",
+        });
 
         await this.save();
         return { success: true, alreadyJoined: true, groupBox };
       }
 
-      // New participant - create new record
+      // NEW PARTICIPANT - first time joining
       const groupBoxData = await this.firebase.loadGroupBox(groupBoxId);
       if (!groupBoxData) {
         return { success: false, errors: ["Group box not found"] };
@@ -450,6 +449,12 @@ class GroupBoxController {
 
       await this.firebase.updateGroupBoxParticipant(groupBoxId, newParticipant);
 
+      // INCREMENT uniqueUsers for brand new participant
+      await updateDoc(doc(this.firebase.db, "group_boxes", groupBoxId), {
+        uniqueUsers: increment(1),
+        updatedAt: new Date().toISOString(),
+      });
+
       // Create participation record
       const participantData = {
         groupBoxId,
@@ -457,11 +462,10 @@ class GroupBoxController {
         lootboxData: groupBoxData.lootboxData,
         settings: groupBoxData.settings,
         expiresAt: groupBoxData.expiresAt || null,
-        expiresIn: groupBoxData.settings?.expiresIn || "never",
         createdBy: groupBoxData.createdBy,
         creatorName: groupBoxData.creatorName,
         totalOpens: groupBoxData.totalOpens || 0,
-        uniqueUsers: groupBoxData.uniqueUsers || 0,
+        uniqueUsers: (groupBoxData.uniqueUsers || 0) + 1,
         firstParticipated: new Date().toISOString(),
         userTotalOpens: 0,
         userRemainingTries: groupBoxData.settings?.triesPerPerson || 3,
@@ -477,32 +481,23 @@ class GroupBoxController {
           "users",
           currentUser.uid,
           "participated_group_boxes",
-          groupBoxId // <- fixed, deterministic id
+          groupBoxId
         ),
         participantData,
         { merge: true }
       );
 
-      participantData.id = groupBoxId; // keep local id fixed
-
-      // add or replace in memory (no duplicates)
-      const existingIndex = this.groupBoxes.findIndex(
-        (gb) => gb.groupBoxId === groupBoxId
-      );
+      participantData.id = groupBoxId;
       const groupBox = new GroupBox(participantData);
-      if (existingIndex >= 0) {
-        this.groupBoxes[existingIndex] = groupBox;
-      } else {
-        this.groupBoxes.push(groupBox);
-      }
+      this.groupBoxes.push(groupBox);
+
       await this.save();
 
       // Record join event
       await this.firebase.addSessionHistoryEvent(groupBoxId, {
         type: "join",
-        userId: currentUser.uid, // ensure present
-        userName: currentUser.displayName || "", // let renderer mask if empty
-        // message ignored for join/leave in FirebaseService
+        userId: currentUser.uid,
+        userName: currentUser.displayName || "",
       });
 
       return { success: true, alreadyJoined: false, groupBox };
@@ -511,6 +506,105 @@ class GroupBoxController {
       return { success: false, errors: [error.message] };
     }
   }
+
+  // In GroupBoxController.js - Fix deleteGroupBox to properly decrement uniqueUsers
+
+  async deleteGroupBox(groupBoxId, deleteForEveryone = false) {
+    try {
+      const groupBox = this.getGroupBox(groupBoxId);
+      if (!groupBox) {
+        return { success: false, errors: ["Group box not found"] };
+      }
+
+      const currentUser = this.firebase.getCurrentUser();
+      if (!currentUser) {
+        return { success: false, errors: ["User not authenticated"] };
+      }
+
+      const groupBoxName = groupBox.groupBoxName;
+
+      // User is leaving (they can only leave once - box disappears from their view)
+      if (
+        !deleteForEveryone ||
+        (groupBox.isCreator && !groupBox.isOrganizerOnly)
+      ) {
+        // Mark as left in their participation record
+        if (groupBox.id) {
+          const { updateDoc, doc, increment } = window.firebaseFunctions;
+
+          await updateDoc(
+            doc(
+              this.firebase.db,
+              "users",
+              currentUser.uid,
+              "participated_group_boxes",
+              groupBox.id
+            ),
+            {
+              hasLeft: true,
+              leftAt: new Date().toISOString(),
+              userRemainingTries: groupBox.userRemainingTries,
+              userTotalOpens: groupBox.userTotalOpens,
+            }
+          );
+
+          // DECREMENT uniqueUsers since they're leaving
+          await updateDoc(doc(this.firebase.db, "group_boxes", groupBoxId), {
+            uniqueUsers: increment(-1),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+
+        // Record leave event
+        const userName = currentUser.displayName || currentUser.uid;
+        await this.firebase.addSessionHistoryEvent(groupBoxId, {
+          type: "leave",
+          userId: currentUser.uid,
+          userName: userName,
+          message: `${userName.substring(0, 5)} has left the box`,
+          timestamp: new Date().toISOString(),
+        });
+      } else if (
+        deleteForEveryone &&
+        groupBox.isCreator &&
+        groupBox.isOrganizerOnly
+      ) {
+        // Creator is deleting for everyone (organizer-only mode)
+        const { deleteDoc, doc } = window.firebaseFunctions;
+        await deleteDoc(doc(this.firebase.db, "group_boxes", groupBoxId));
+
+        // Also delete the participation record
+        if (groupBox.id) {
+          await deleteDoc(
+            doc(
+              this.firebase.db,
+              "users",
+              currentUser.uid,
+              "participated_group_boxes",
+              groupBox.id
+            )
+          );
+        }
+      }
+
+      // Remove from local array (box disappears from their view)
+      const index = this.groupBoxes.findIndex(
+        (gb) => gb.groupBoxId === groupBoxId
+      );
+      if (index >= 0) {
+        this.groupBoxes.splice(index, 1);
+      }
+
+      await this.save();
+      this.getAllGroupBoxes(); // Cleanup
+
+      return { success: true, groupBoxName };
+    } catch (error) {
+      console.error("Error deleting group box:", error);
+      return { success: false, errors: [error.message] };
+    }
+  }
+
   async adjustUserTries(groupBoxId, userId, delta) {
     try {
       if (!this.firebase.isReady) {
