@@ -1227,14 +1227,14 @@ class GroupBoxController {
       await this.firebase.recordSpin(groupBoxId, result);
 
       // Update the total spins counter in the main group box document
-      try {
-        const { updateDoc, doc, increment } = window.firebaseFunctions;
-        await updateDoc(doc(this.firebase.db, "group_boxes", groupBoxId), {
-          totalSpins: increment(1),
-        });
-      } catch (e) {
-        console.warn("Could not update spin counter:", e);
-      }
+      // try {
+      //   const { updateDoc, doc, increment } = window.firebaseFunctions;
+      //   await updateDoc(doc(this.firebase.db, "group_boxes", groupBoxId), {
+      //     totalSpins: increment(1),
+      //   });
+      // } catch (e) {
+      //   console.warn("Could not update spin counter:", e);
+      // }
 
       await this.save();
 
