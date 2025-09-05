@@ -391,6 +391,9 @@ class AuthService {
     const existing = document.getElementById("signInModal");
     if (existing) existing.remove();
 
+    // Lock body scroll
+    document.body.style.overflow = 'hidden';
+
     const modal = document.createElement("div");
     modal.id = "signInModal";
     modal.className = "modal show";
@@ -440,6 +443,14 @@ class AuthService {
     `;
 
     document.body.appendChild(modal);
+
+    // Add backdrop click handler to close modal and unlock scroll
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+        document.body.style.overflow = '';
+      }
+    });
 
     // Add CSS for auth buttons if not present
     if (!document.getElementById("authStyles")) {
