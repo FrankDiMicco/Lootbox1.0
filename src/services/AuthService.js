@@ -29,8 +29,6 @@ class AuthService {
     this.currentUser = null;
     this.isAnonymous = false;
     this.authStateListeners = [];
-    
-    // Initialize Firestore reference
     this.db = getFirestore(firebaseApp);
 
     // Initialize providers
@@ -46,8 +44,11 @@ class AuthService {
 
     // Listen for auth state changes
     onAuthStateChanged(this.auth, (user) => {
+      console.log("Auth state changed:", user?.email || user?.uid || "no user");
       this.handleAuthStateChange(user);
     });
+    
+    // Don't automatically call initializeAuth() here
   }
 
   handleAuthStateChange(user) {

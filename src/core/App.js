@@ -66,8 +66,8 @@ class App {
       await this.services.firebase.initialize();
 
       // Initialize auth service AFTER Firebase
+      // Auth is already initialized by FirebaseService, so just create the AuthService
       this.services.auth = new AuthService(this.services.firebase.app);
-      await this.services.auth.initializeAuth();
 
       // Initialize controllers with dependency injection
       this.controllers.lootbox = new LootboxController(

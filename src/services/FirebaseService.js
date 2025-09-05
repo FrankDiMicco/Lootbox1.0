@@ -57,28 +57,18 @@ class FirebaseService {
       this.auth = getAuth(this.app);
       this.db = getFirestore(this.app);
 
-      // Set persistence to local storage to maintain sessions across browser refreshes
-      await setPersistence(this.auth, browserLocalPersistence);
+      // Wait for auth state to settle before proceeding
+      const currentUser = await this.waitForAuth();
+      
+      if (currentUser) {
+        console.log("Session restored for:", currentUser.email || currentUser.uid);
+      } else {
+        console.log("No session found, creating anonymous user");
+        const userCredential = await signInAnonymously(this.auth);
+        console.log("Signed in anonymously with uid:", userCredential.user.uid);
+      }
 
-      // Wait for auth state to be determined
-      await new Promise((resolve) => {
-        const unsubscribe = onAuthStateChanged(this.auth, (user) => {
-          unsubscribe();
-          if (user) {
-            console.log("Restored existing session:", user.uid, user.email || "(anonymous)");
-            resolve(user);
-          } else {
-            // Only sign in anonymously if no user exists
-            console.log("No existing session, signing in anonymously...");
-            signInAnonymously(this.auth).then((credential) => {
-              console.log("Signed in anonymously with uid:", credential.user.uid);
-              resolve(credential.user);
-            });
-          }
-        });
-      });
-
-      // expose for legacy callers
+      // Set up Firebase functions...
       window.firebaseAuth = this.auth;
       window.firebaseDb = this.db;
       window.firebaseFunctions = {
@@ -108,6 +98,25 @@ class FirebaseService {
       console.error("Firebase initialization error:", error);
       throw error;
     }
+  }
+
+  // Helper method to wait for auth state with timeout
+  async waitForAuth() {
+    return new Promise((resolve) => {
+      const unsubscribe = onAuthStateChanged(this.auth, (user) => {
+        // Give Firebase a moment to fully initialize the user
+        setTimeout(() => {
+          unsubscribe();
+          resolve(user);
+        }, 100);
+      });
+      
+      // Timeout fallback - if no auth state after 3 seconds, proceed
+      setTimeout(() => {
+        unsubscribe();
+        resolve(null);
+      }, 3000);
+    });
   }
 
   getCurrentUser() {
