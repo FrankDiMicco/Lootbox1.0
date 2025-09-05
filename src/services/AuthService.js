@@ -8,7 +8,20 @@ import {
   linkWithPopup,
   signOut,
   onAuthStateChanged,
+  signInWithCredential,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  getDocs,
+  writeBatch,
+  doc,
+  terminate,
+  clearIndexedDbPersistence,
+} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
 class AuthService {
   constructor(firebaseApp) {
@@ -16,6 +29,9 @@ class AuthService {
     this.currentUser = null;
     this.isAnonymous = false;
     this.authStateListeners = [];
+    
+    // Initialize Firestore reference
+    this.db = getFirestore(firebaseApp);
 
     // Initialize providers
     this.googleProvider = new GoogleAuthProvider();
@@ -51,6 +67,11 @@ class AuthService {
     const profileStatus = document.querySelector(".profile-status");
     const footerName = document.querySelector(".footer-name");
     const footerStatus = document.querySelector(".footer-status");
+    
+    // Get sign-in and sign-out buttons
+    const signInButtons = document.querySelectorAll(".sign-in-btn");
+    const signOutItems = document.querySelectorAll(".sign-out-item");
+    const userMenuBtn = document.querySelector(".user-menu-btn");
 
     if (user) {
       const displayName = user.displayName || "User";
@@ -63,10 +84,23 @@ class AuthService {
         if (profileStatus)
           profileStatus.textContent = "Guest - Sign in to save";
         if (footerStatus) footerStatus.textContent = "Not signed in";
+        
+        // Show sign-in buttons, hide sign-out
+        signInButtons.forEach(btn => btn.style.display = "flex");
+        signOutItems.forEach(item => item.style.display = "none");
+        if (userMenuBtn) userMenuBtn.style.display = "none";
+        
         this.showUpgradePrompts();
       } else {
+        // User is signed in with Google/Apple
         if (profileStatus) profileStatus.textContent = "Signed in";
         if (footerStatus) footerStatus.textContent = email || "Signed in";
+        
+        // Hide sign-in buttons, show sign-out
+        signInButtons.forEach(btn => btn.style.display = "none");
+        signOutItems.forEach(item => item.style.display = "block");
+        if (userMenuBtn) userMenuBtn.style.display = "flex";
+        
         this.hideUpgradePrompts();
       }
     } else {
@@ -74,6 +108,11 @@ class AuthService {
       if (profileStatus) profileStatus.textContent = "Not signed in";
       if (footerName) footerName.textContent = "Guest User";
       if (footerStatus) footerStatus.textContent = "Not signed in";
+      
+      // Show sign-in buttons, hide sign-out
+      signInButtons.forEach(btn => btn.style.display = "flex");
+      signOutItems.forEach(item => item.style.display = "none");
+      if (userMenuBtn) userMenuBtn.style.display = "none";
     }
   }
 
@@ -108,19 +147,96 @@ class AuthService {
     }
   }
 
-  // Sign in with Google
+  // Sign in with Google (with anonymous linking)
   async signInWithGoogle() {
+    const provider = new GoogleAuthProvider();
+    const auth = this.auth; // you already have this
+    const db = this.db; // make sure you have initialized Firestore on this.db
+
+    const current = auth.currentUser;
+    const wasAnonymous = !!current && current.isAnonymous;
+    const oldUid = wasAnonymous ? current.uid : null;
+
     try {
-      const result = await signInWithPopup(this.auth, this.googleProvider);
-      console.log("Google sign-in successful:", result.user.displayName);
+      if (wasAnonymous) {
+        // Prefer linking to keep same uid/session when possible
+        const linkResult = await linkWithPopup(current, provider);
+        this.trackAuthMethod("google");
+        return { success: true, user: linkResult.user };
+      } else {
+        // Normal Google sign-in
+        const signInResult = await signInWithPopup(auth, provider);
+        this.trackAuthMethod("google");
+        return { success: true, user: signInResult.user };
+      }
+    } catch (err) {
+      // If this Google account already exists, merge the anon data to that Google uid
+      if (
+        err?.code === "auth/credential-already-in-use" ||
+        err?.code === "auth/account-exists-with-different-credential"
+      ) {
+        const cred = GoogleAuthProvider.credentialFromError(err);
+        if (!cred) {
+          console.error("No Google credential found in error", err);
+          return { success: false, error: this.getReadableError(err) };
+        }
 
-      // Track the sign-in method
-      this.trackAuthMethod("google");
+        // Sign in to the existing Google account
+        const signInRes = await signInWithCredential(auth, cred);
+        this.trackAuthMethod("google");
 
-      return { success: true, user: result.user };
+        const newUid = signInRes.user.uid;
+        // Move any anon-owned lootboxes to the Google uid
+        if (oldUid && newUid && oldUid !== newUid) {
+          await this._migrateLootboxesToNewOwner(db, oldUid, newUid);
+        }
+
+        return { success: true, user: signInRes.user, merged: true };
+      }
+
+      console.error("Google sign-in failed:", err);
+      return { success: false, error: this.getReadableError(err) };
+    }
+  }
+
+  // Private helper to migrate lootboxes to new owner
+  async _migrateLootboxesToNewOwner(db, oldUid, newUid) {
+    try {
+      const lootboxesRef = collection(db, "lootboxes");
+      const q = query(lootboxesRef, where("uid", "==", oldUid));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        console.log('No lootboxes to migrate');
+        return;
+      }
+
+      const batch = writeBatch(db);
+      snap.forEach((d) => {
+        batch.update(doc(db, "lootboxes", d.id), { uid: newUid });
+      });
+      await batch.commit();
+      console.log(`Migrated ${snap.size} lootboxes from ${oldUid} to ${newUid}`);
     } catch (error) {
-      console.error("Google sign-in failed:", error);
-      return { success: false, error: this.getReadableError(error) };
+      console.warn('Migration failed (non-critical):', error.message);
+      // Don't throw - let sign-in continue even if migration fails
+    }
+  }
+
+  async signOutAndClear() {
+    try {
+      await signOut(this.auth);
+
+      // clear local Firestore cache so old boxes don’t linger
+      await terminate(this.db).catch(() => {});
+      await clearIndexedDbPersistence(this.db).catch(() => {});
+      location.reload();
+
+      console.log("Signed out and cache cleared");
+      return { success: true };
+    } catch (error) {
+      console.error("Sign-out failed:", error);
+      return { success: false, error };
     }
   }
 
@@ -187,10 +303,15 @@ class AuthService {
     try {
       await signOut(this.auth);
       console.log("User signed out");
-
-      // Restart with anonymous auth
-      await this.initializeAuth();
-
+      
+      // Create fresh anonymous session
+      await signInAnonymously(this.auth);
+      console.log("Started fresh anonymous session");
+      
+      // Clear any cached data
+      this.currentUser = null;
+      this.isAnonymous = true;
+      
       return { success: true };
     } catch (error) {
       console.error("Sign out failed:", error);

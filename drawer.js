@@ -77,13 +77,13 @@ class NavigationDrawer {
             });
         });
         
-        // Sign-out button - close drawer when clicked
-        const signOutButton = document.querySelector('[data-action="sign-out"]');
-        if (signOutButton) {
-            signOutButton.addEventListener('click', () => {
+        // Sign-out buttons - close drawer when clicked
+        const signOutButtons = document.querySelectorAll('[data-action="sign-out"]');
+        signOutButtons.forEach(button => {
+            button.addEventListener('click', () => {
                 this.closeDrawer();
             });
-        }
+        });
         
         // ESC key
         document.addEventListener('keydown', (e) => {

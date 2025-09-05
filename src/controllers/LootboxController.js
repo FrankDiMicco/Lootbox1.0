@@ -14,16 +14,14 @@ class LootboxController {
       console.log("Initializing LootboxController...");
 
       if (this.firebase.isReady) {
-        console.log("Syncing any offline lootboxes first...");
-        await this.syncLocalToFirebase(); // migrate drafts to Firebase
-
         console.log("Loading lootboxes from Firebase...");
         const firebaseLootboxes = await this.firebase.loadLootboxes();
         this.lootboxes = firebaseLootboxes.map((data) =>
           data instanceof Lootbox ? data : new Lootbox(data)
         );
-
-        // cloud is source of truth now; clear local backup
+        console.log(`Loaded ${this.lootboxes.length} lootboxes from Firebase`);
+        
+        // Clear local storage since Firebase is source of truth
         this.storage.remove("lootboxes");
       } else {
         console.log("Firebase not available, loading from localStorage...");
@@ -31,15 +29,11 @@ class LootboxController {
         this.lootboxes = storageLootboxes.map((data) =>
           data instanceof Lootbox ? data : new Lootbox(data)
         );
-        console.log(
-          `Loaded ${this.lootboxes.length} lootboxes from localStorage`
-        );
+        console.log(`Loaded ${this.lootboxes.length} lootboxes from localStorage`);
       }
 
       // Fix chest paths
-      const fixedCount = await ChestImageHelper.fixAllChestPaths(
-        this.lootboxes
-      );
+      const fixedCount = await ChestImageHelper.fixAllChestPaths(this.lootboxes);
       if (fixedCount > 0) {
         console.log(`Fixed ${fixedCount} chest image paths`);
         await this.save();
@@ -63,10 +57,21 @@ class LootboxController {
 
     for (const localBox of localBoxes) {
       if (!localBox.id || !firebaseIds.has(localBox.id)) {
-        // This box doesn't exist in Firebase - upload it
-        const id = await this.firebase.saveLootbox(localBox);
-        localBox.id = id;
-        console.log(`Synced local box "${localBox.name}" to Firebase`);
+        try {
+          // This box doesn't exist in Firebase - upload it
+          const id = await this.firebase.saveLootbox(localBox);
+          localBox.id = id;
+          console.log(`Synced local box "${localBox.name}" to Firebase`);
+        } catch (error) {
+          if (error.code === 'permission-denied' || error.message?.includes('permission')) {
+            console.log(`Skipping box "${localBox.name}" - belongs to different user`);
+            // Remove this box from local storage as it belongs to a different user
+            continue;
+          } else {
+            console.error(`Error syncing box "${localBox.name}":`, error);
+            throw error;
+          }
+        }
       }
     }
   }

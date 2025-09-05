@@ -306,6 +306,10 @@ class App {
           await this.handleDeleteLootbox(parseInt(data.index));
           break;
 
+        case "sign-out":
+          await this.services.auth.signOutAndClear();
+          break;
+
         case "share-lootbox":
           // This keeps the modal for regular lootboxes
           const shareIndex = parseInt(data.index);
@@ -546,6 +550,10 @@ class App {
 
         case "sign-in-google":
           await this.handleGoogleSignIn();
+          break;
+
+        case "sign-out":
+          await this.services.auth.signOutAndClear();
           break;
 
         case "sign-in-apple":
@@ -1061,21 +1069,14 @@ class App {
 
   async handleGoogleSignIn() {
     try {
-      let result;
-
-      if (this.services.auth.isAnonymousUser()) {
-        // Upgrade anonymous account
-        result = await this.services.auth.upgradeAnonymousAccount("google");
-      } else {
-        // Regular sign-in
-        result = await this.services.auth.signInWithGoogle();
-      }
+      // Always do regular sign-in, don't try to upgrade anonymous accounts
+      const result = await this.services.auth.signInWithGoogle();
 
       if (result.success) {
         this.controllers.ui.closeModal("signInModal");
         this.controllers.ui.showToast(`Welcome ${result.user.displayName}!`);
 
-        // Refresh data to sync with new account
+        // Refresh data to load the signed-in user's lootboxes
         await this.loadInitialData();
         this.controllers.ui.render();
       } else {
@@ -1118,7 +1119,9 @@ class App {
     const result = await this.services.auth.signOut();
     if (result.success) {
       this.controllers.ui.showToast("Signed out successfully");
-      // Clear local data and reload
+      // Clear local data and reload for fresh start
+      this.controllers.lootbox.lootboxes = [];
+      this.controllers.groupBox.groupBoxes = [];
       await this.loadInitialData();
       this.controllers.ui.render();
     }

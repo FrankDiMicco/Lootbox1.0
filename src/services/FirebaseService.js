@@ -95,45 +95,115 @@ class FirebaseService {
 
   // ===== Lootboxes (personal) =====
 
-  async saveLootbox(lootbox) {
-    if (!this.isReady || !this.getCurrentUser()) {
-      throw new Error("Firebase not ready or user not authenticated");
-    }
-    const currentUser = this.getCurrentUser();
-    const payload = { ...lootbox, uid: currentUser.uid };
+  // In FirebaseService.js - Replace the saveLootbox method with this fixed version:
 
-    if (lootbox.id) {
-      const id = lootbox.id;
-      delete payload.id;
-      await setDoc(doc(this.db, "lootboxes", id), payload);
-      console.log("Updated lootbox in Firebase:", id);
-      return id;
-    } else {
-      const docRef = await addDoc(collection(this.db, "lootboxes"), payload);
-      console.log("Created new lootbox in Firebase:", docRef.id);
-      return docRef.id;
+  async saveLootbox(lootbox) {
+    if (!this.isReady) {
+      throw new Error("Firebase not ready");
+    }
+
+    const currentUser = this.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("User not authenticated - cannot save lootbox");
+    }
+
+    console.log("Saving lootbox for user:", currentUser.uid);
+    console.log("Lootbox data:", lootbox);
+
+    // Ensure we always have a UID in the payload
+    const payload = {
+      ...lootbox,
+      uid: currentUser.uid,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Verify the UID is actually in the payload
+    if (!payload.uid) {
+      throw new Error("Failed to add UID to lootbox payload");
+    }
+
+    console.log("Payload being saved:", payload);
+
+    try {
+      if (lootbox.id) {
+        // Update existing lootbox
+        const id = lootbox.id;
+        const payloadToSave = { ...payload };
+        delete payloadToSave.id; // Remove id from the data being saved
+
+        await setDoc(doc(this.db, "lootboxes", id), payloadToSave);
+        console.log(
+          "Updated lootbox in Firebase:",
+          id,
+          "for user:",
+          currentUser.uid
+        );
+        return id;
+      } else {
+        // Create new lootbox
+        const docRef = await addDoc(collection(this.db, "lootboxes"), payload);
+        console.log(
+          "Created new lootbox in Firebase:",
+          docRef.id,
+          "for user:",
+          currentUser.uid
+        );
+        return docRef.id;
+      }
+    } catch (error) {
+      console.error("Error saving lootbox to Firebase:", error);
+      console.error("User:", currentUser);
+      console.error("Payload:", payload);
+      throw error;
     }
   }
 
   async loadLootboxes() {
-    if (!this.isReady || !this.getCurrentUser()) {
-      throw new Error("Firebase not ready or user not authenticated");
+    if (!this.isReady) {
+      throw new Error("Firebase not ready");
     }
-    const currentUser = this.getCurrentUser();
-    const qy = query(
-      collection(this.db, "lootboxes"),
-      where("uid", "==", currentUser.uid)
-    );
-    const querySnapshot = await getDocs(qy);
 
-    const lootboxes = [];
-    querySnapshot.forEach((d) => {
-      const data = d.data();
-      delete data.uid;
-      lootboxes.push({ id: d.id, ...data });
-    });
-    console.log(`Loaded ${lootboxes.length} lootboxes from Firebase`);
-    return lootboxes;
+    const currentUser = this.getCurrentUser();
+    if (!currentUser) {
+      throw new Error("User not authenticated");
+    }
+
+    console.log("Loading lootboxes for user:", currentUser.uid);
+
+    try {
+      // Query for lootboxes that belong to this user
+      const userQuery = query(
+        collection(this.db, "lootboxes"),
+        where("uid", "==", currentUser.uid)
+      );
+      const querySnapshot = await getDocs(userQuery);
+
+      const lootboxes = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        // Remove uid from the returned data (we don't need it in the app)
+        delete data.uid;
+        // IMPORTANT: Spread data first, then override with doc.id
+        lootboxes.push({ ...data, id: doc.id });
+      });
+
+      console.log(
+        `Loaded ${lootboxes.length} lootboxes from Firebase for user ${currentUser.uid}`
+      );
+
+      // Optional: Log if there are orphaned lootboxes (for debugging)
+      if (
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1"
+      ) {
+        this.logOrphanedLootboxes();
+      }
+
+      return lootboxes;
+    } catch (error) {
+      console.error("Error loading lootboxes:", error);
+      throw error;
+    }
   }
 
   async deleteLootbox(id) {
@@ -141,7 +211,29 @@ class FirebaseService {
     await deleteDoc(doc(this.db, "lootboxes", id));
     console.log("Deleted lootbox from Firebase:", id);
   }
+  async logOrphanedLootboxes() {
+    try {
+      // Query for lootboxes with no uid field
+      const orphanQuery = query(
+        collection(this.db, "lootboxes"),
+        where("uid", "==", null)
+      );
+      const orphanSnapshot = await getDocs(orphanQuery);
 
+      if (!orphanSnapshot.empty) {
+        console.warn(
+          `Found ${orphanSnapshot.size} orphaned lootboxes without UID:`,
+          orphanSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            name: doc.data().name,
+          }))
+        );
+      }
+    } catch (error) {
+      // Ignore errors in this debug helper
+      console.log("Could not check for orphaned lootboxes:", error.message);
+    }
+  }
   async recordSpin(lootboxId, result) {
     if (!this.isReady || !this.getCurrentUser()) {
       throw new Error("Firebase not ready or user not authenticated");
