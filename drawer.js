@@ -69,6 +69,23 @@ class NavigationDrawer {
             this.overlay.addEventListener('click', () => this.closeDrawer());
         }
         
+        // User menu toggle (three dots)
+        const userMenuBtn = document.querySelector('.user-menu-btn');
+        const userMenu = document.getElementById('userMenu');
+        if (userMenuBtn && userMenu) {
+            userMenuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                userMenu.classList.toggle('hidden');
+            });
+            
+            // Close menu when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!userMenu.contains(e.target) && !userMenuBtn.contains(e.target)) {
+                    userMenu.classList.add('hidden');
+                }
+            });
+        }
+        
         // Sign-in buttons - close drawer when clicked
         const signInButtons = document.querySelectorAll('[data-action="show-sign-in"]');
         signInButtons.forEach(button => {
@@ -77,10 +94,11 @@ class NavigationDrawer {
             });
         });
         
-        // Sign-out buttons - close drawer when clicked
+        // Sign-out buttons - close drawer and menu when clicked
         const signOutButtons = document.querySelectorAll('[data-action="sign-out"]');
         signOutButtons.forEach(button => {
             button.addEventListener('click', () => {
+                if (userMenu) userMenu.classList.add('hidden');
                 this.closeDrawer();
             });
         });

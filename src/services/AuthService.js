@@ -74,7 +74,16 @@ class AuthService {
     const userMenuBtn = document.querySelector(".user-menu-btn");
 
     if (user) {
-      const displayName = user.displayName || "User";
+      // Try to get a meaningful display name
+      let displayName = user.displayName;
+      if (!displayName && user.email) {
+        // Use the part before @ in email as fallback
+        displayName = user.email.split('@')[0];
+      }
+      if (!displayName) {
+        displayName = user.isAnonymous ? "Guest User" : "User";
+      }
+      
       const email = user.email || "";
 
       if (profileName) profileName.textContent = displayName;
