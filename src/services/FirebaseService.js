@@ -4,6 +4,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/fireba
 import {
   getAuth,
   signInAnonymously,
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 import {
   getFirestore,
@@ -54,6 +57,27 @@ class FirebaseService {
       this.auth = getAuth(this.app);
       this.db = getFirestore(this.app);
 
+      // Set persistence to local storage to maintain sessions across browser refreshes
+      await setPersistence(this.auth, browserLocalPersistence);
+
+      // Wait for auth state to be determined
+      await new Promise((resolve) => {
+        const unsubscribe = onAuthStateChanged(this.auth, (user) => {
+          unsubscribe();
+          if (user) {
+            console.log("Restored existing session:", user.uid, user.email || "(anonymous)");
+            resolve(user);
+          } else {
+            // Only sign in anonymously if no user exists
+            console.log("No existing session, signing in anonymously...");
+            signInAnonymously(this.auth).then((credential) => {
+              console.log("Signed in anonymously with uid:", credential.user.uid);
+              resolve(credential.user);
+            });
+          }
+        });
+      });
+
       // expose for legacy callers
       window.firebaseAuth = this.auth;
       window.firebaseDb = this.db;
@@ -77,9 +101,6 @@ class FirebaseService {
         runTransaction,
       };
       window.firebaseService = this;
-
-      const userCredential = await signInAnonymously(this.auth);
-      console.log("Signed in anonymously with uid:", userCredential.user.uid);
 
       this.isReady = true;
       console.log("Firebase initialized successfully");
